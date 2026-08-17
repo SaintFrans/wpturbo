@@ -215,7 +215,7 @@ Use Wayfinder to generate TypeScript functions for Laravel routes. Import from `
   Everything BELOW this line is project-specific and hand-maintained.
 -->
 
-# wpturbo — project guidance
+# Hestri — project guidance
 
 ## What we are building
 

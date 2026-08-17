@@ -1,20 +1,25 @@
-import { usePage } from '@inertiajs/react';
+import type { SVGAttributes } from 'react';
 
-import AppLogoIcon from '@/components/app-logo-icon';
-
-export default function AppLogo() {
-    const { name } = usePage().props;
-
+export default function AppLogo(props: SVGAttributes<SVGElement>) {
     return (
-        <>
-            <div className="flex aspect-square size-8 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-                <AppLogoIcon className="size-5 fill-current text-white dark:text-black" />
-            </div>
-            <div className="ml-1 grid flex-1 text-left text-sm">
-                <span className="mb-0.5 truncate leading-tight font-semibold">
-                    {name}
-                </span>
-            </div>
-        </>
+        <svg
+            {...props}
+            viewBox="0 0 634.35 155.2"
+            xmlns="http://www.w3.org/2000/svg"
+        >
+            <rect width="52.4" height="52.4" />
+            <rect x="102.7" y="102.8" width="52.4" height="52.4" />
+            <polygon points="52.4 52.5 112.7 52.5 102.7 102.8 42.4 102.8 52.4 52.5" />
+            <polygon points="102.7 0 155.1 0 155.1 52.4 102.7 62.4 102.7 0" />
+            <polygon points="0 102.8 52.4 92.8 52.4 155.2 0 155.2 0 102.8" />
+            <polyline points="102.7 102.8 92.7 52.5 155.2 52.5" />
+            <polyline points="52.4 52.5 62.4 102.8 0 102.8" />
+            <path d="M207.6,24.35h22.8v43.35h40.35V24.35h22.8v106.5h-22.8v-43.95h-40.35v43.95h-22.8V24.35Z" />
+            <path d="M308.7,90.65c0-25.35,15.9-42,40.35-42s39.45,16.5,39.45,43.5v4.5h-56.55c.6,12.75,7.35,18.9,17.7,18.9,7.5,0,12.9-3.15,15-9.75l22.65,1.35c-4.35,16.05-18.75,25.5-38.1,25.5-24.6,0-40.5-16.65-40.5-42ZM365.4,82.85c-.6-11.7-7.05-17.55-16.35-17.55s-15.9,6.45-17.1,17.55h33.45Z" />
+            <path d="M397.95,105.5l22.8-.75c1.35,7.65,5.7,12,15.9,12,8.1,0,12.45-2.7,12.45-8.1,0-4.95-2.7-7.2-16.05-9.45-25.2-4.35-32.7-10.8-32.7-24.75,0-15.45,12-25.8,35.85-25.8s34.95,11.85,36.15,27.6l-22.5.9c-.3-7.5-4.65-12.6-13.95-12.6-7.95,0-12.3,3.6-12.3,9,0,5.85,3.3,8.25,14.4,9.9,25.35,3.75,34.2,10.95,34.2,24.9,0,15.6-13.65,24.3-35.55,24.3-25.95,0-37.5-11.4-38.7-27.15Z" />
+            <path d="M493.05,106.7v-39.45h-12.9v-16.8h12.9v-18.9h22.5v18.9h21.15v16.8h-21.15v36.75c0,7.8,3.3,10.05,9.9,10.05h11.25v16.8h-19.5c-16.65,0-24.15-7.35-24.15-24.15Z" />
+            <path d="M551.4,50.45h21.3l.6,16.05c3.15-11.25,9.3-16.05,19.05-16.05h7.35v18.6h-7.35c-12.6,0-18.45,4.65-18.45,16.65v45.15h-22.5V50.45Z" />
+            <path d="M611.1,22.55h23.25v18h-23.25v-18ZM611.55,50.45h22.5v80.4h-22.5V50.45Z" />
+        </svg>
     );
 }

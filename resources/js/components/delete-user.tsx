@@ -31,7 +31,9 @@ export default function DeleteUser() {
     return (
         <Frame>
             <FrameHeader>
-                <FrameTitle className="text-destructive-foreground">Danger</FrameTitle>
+                <FrameTitle className="text-destructive-foreground">
+                    Danger
+                </FrameTitle>
                 <FrameDescription>
                     Destructive settings that cannot be undone.
                 </FrameDescription>

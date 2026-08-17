@@ -74,7 +74,7 @@ export function AppHeader() {
                                     Navigation
                                 </SheetTitle>
                                 <SheetHeader className="text-left">
-                                    <AppLogoIcon className="size-6 fill-current" />
+                                    <AppLogoIcon className="size-6 fill-current text-foreground" />
                                 </SheetHeader>
                                 <div className="flex flex-1 flex-col gap-4 p-4 text-sm">
                                     <div className="flex flex-col gap-3">

@@ -1,3 +1,4 @@
+import { usePage } from '@inertiajs/react';
 import { toUrl } from '@/lib/utils';
 import type { NavItem } from '@/types';
 
@@ -15,10 +16,14 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppFooter() {
+    const { name } = usePage().props;
+
     return (
         <footer className="hidden bg-background sm:block">
             <div className="mx-auto flex max-w-[1920px] flex-col items-center justify-between gap-y-4 px-6 py-4 text-sm text-muted-foreground sm:flex-row">
-                <span>wpturbo © {new Date().getFullYear()}</span>
+                <span>
+                    {name} © {new Date().getFullYear()}
+                </span>
 
                 <div className="flex items-center gap-6">
                     {footerNavItems.map((item) => (

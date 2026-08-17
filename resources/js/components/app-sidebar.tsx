@@ -51,7 +51,7 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" href={toUrl(dashboardUrl)}>
-                            <AppLogo />
+                            <AppLogo className="h-6 w-auto fill-current text-sidebar-primary" />
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>

@@ -1,4 +1,4 @@
-# wpturbo
+# Hestri
 
 A control plane for managed and semi-managed WordPress hosting.
 
@@ -8,7 +8,7 @@ A control plane for managed and semi-managed WordPress hosting.
 
 ## What this is
 
-wpturbo is the control plane through which WordPress sites are managed at scale. The
+Hestri is the control plane through which WordPress sites are managed at scale. The
 intended model has two tiers:
 
 1. **Semi-managed (first target).** Customers bring their own servers. The platform

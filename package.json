@@ -5,6 +5,12 @@
     "scripts": {
         "build": "vp build",
         "build:ssr": "vp build && vp build --ssr",
+        "db:fresh": "php artisan migrate:fresh",
+        "db:fresh:seed": "php artisan migrate:fresh --seed",
+        "db:migrate": "php artisan migrate",
+        "db:rollback": "php artisan migrate:rollback",
+        "db:seed": "php artisan db:seed",
+        "db:status": "php artisan migrate:status",
         "dev": "php artisan dev",
         "format": "vp fmt resources/",
         "format:check": "vp fmt --check resources/",

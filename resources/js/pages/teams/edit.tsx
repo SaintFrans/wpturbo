@@ -100,7 +100,11 @@ export default function TeamEdit({
 
             <div className="flex flex-col gap-y-6">
                 {permissions.canUpdateTeam ? (
-                    <Form {...update.form(team.slug)} className="w-full">
+                    <Form
+                        {...update.form(team.slug)}
+                        setDefaultsOnSuccess
+                        className="w-full"
+                    >
                         {({ errors, processing, isDirty, clearErrors }) => (
                             <Frame>
                                 <FrameHeader>
