@@ -6,6 +6,17 @@ This document separates **what is built** from **what is intended**. Every secti
 which it is. Intended architecture is written down so decisions are not re-litigated, not
 because it exists.
 
+> **Pending changes — read before trusting the names below.** Five accepted ADRs are not yet
+> implemented: [ADR-025](DECISIONS.md) renames `Team` to `Organization`, removes the personal
+> team and stops the implicit switch on prefix navigation; [ADR-026](DECISIONS.md) settles the
+> `app/` layout; [ADR-027](DECISIONS.md) replaces the slug with a random immutable `public_id`;
+> [ADR-028](DECISIONS.md) lets Admins manage members below their own role;
+> [ADR-029](DECISIONS.md) documents owner recovery. The execution plan for all of them is
+> [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md).
+>
+> Everything below describes the code **as it stands today** and is accurate for it. Read every
+> "team" here as "organization" for anything you are about to build.
+
 ## 1. System overview
 
 ```
@@ -42,7 +53,7 @@ controllers, and Wayfinder generates typed TypeScript callers for those controll
 | Route typing     | Laravel Wayfinder → `resources/js/actions/` and `resources/js/routes/`                   |
 | Auth             | Laravel Fortify + `@laravel/passkeys`                                                    |
 | Build            | Vite+ (`vp`) 0.2.9 over Vite, pnpm 11, Node 24                                           |
-| Tests            | Pest 4 (93 tests, backend only — see Q9)                                                 |
+| Tests            | Pest 4 (93 tests, backend only; ADR-024 adds scoped browser coverage, not yet built)     |
 | Static analysis  | Larastan / PHPStan (`phpstan.neon`), Oxlint type-aware linting                           |
 | Formatting       | Pint (PHP), Oxfmt (TS/React; ignore list in `fmt.ignorePatterns`)                        |
 
@@ -115,8 +126,12 @@ app/
 There are no `app/Jobs`, `app/Services`, or `app/Events` directories. Nothing is queued
 anywhere in the application, despite `QUEUE_CONNECTION=database` being configured.
 
-Whether to keep type-first organisation or move to domain folders once Servers and Sites
-arrive is unresolved — see [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+This is **settled by [ADR-026](DECISIONS.md)**, which was briefly reversed and reinstated: the
+type-first layout stays, and each type folder gains a subfolder per domain
+(`app/Models/Organizations/`, later `app/Actions/Sites/`). Files belonging to no domain —
+`User`, `Providers`, `Console`, Fortify actions, shared traits — stay flat. Half of that shape
+already exists (`Http/Controllers/Teams`, `Http/Requests/Teams`, `Actions/Teams`,
+`Notifications/Teams`); the rest lands with the rename.
 
 ### Frontend structure
 
@@ -171,6 +186,13 @@ Only the prefixed form triggers the automatic team switch. Only **one** route us
 prefixed form today: the dashboard. Every future tenant-scoped resource — servers, sites —
 should use the prefixed form, so the URL always states which tenant the user is looking at.
 
+**This split is being removed.** [ADR-025](DECISIONS.md) collapses it: organization
+administration moves inside the prefix at `/{current_organization}/settings/…`, `/settings/…`
+becomes purely personal, and only the organization list-and-create page stays outside. The
+automatic switch is removed at the same time — the URL will scope the request without
+persisting the user's current organization. See
+[ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §5 and §6.
+
 ### Team name collisions with route prefixes
 
 Because team slugs occupy the first URL segment, a team named "settings" would shadow the
@@ -182,6 +204,15 @@ create and rename.
 Slugs are generated from the name and regenerated on rename, with a numeric suffix for
 collisions. `withTrashed()` is included in the uniqueness check, so a soft-deleted team's
 slug is never reissued.
+
+**This whole subsection becomes obsolete under [ADR-027](DECISIONS.md).** The first URL segment
+becomes a random, immutable twelve-character `public_id` instead of a name-derived slug, which
+removes the collision class entirely: a random token cannot shadow a route literal, so the
+reserved-word list and `TeamName`'s route-prefix check are deleted and organization names become
+free text. Two things go with it — the `-2` collision suffix, and the regeneration-on-rename that
+currently breaks every existing link when someone renames their organization. The `withTrashed()`
+rule is the one part that survives unchanged, and it must: it is what stops a stale bookmark
+resolving to a different tenant.
 
 ## 4. Authentication (BUILT)
 
@@ -207,6 +238,12 @@ prefixed dashboard rather than a bare `/dashboard`.
 Registration creates a personal team for the new user in the same database transaction
 (`CreateNewUser` → `CreateTeam`), so a user is never left without a tenant.
 
+[ADR-025](DECISIONS.md) keeps that invariant but removes `is_personal`: the organization
+created at registration is a normal one, named after the user and renameable. The guarantee is
+enforced instead by blocking a user from leaving their last organization, and creating one if
+their last membership is removed by someone else. No organization-name field is added to the
+registration form — not everyone signing up is a company.
+
 Password policy tightens in production only (`AppServiceProvider::configureDefaults`):
 12 characters, mixed case, numbers, symbols, and a check against known breach corpora. In
 local and test environments there is no policy, to keep factories and fixtures simple.
@@ -226,7 +263,8 @@ team invitations.
 
 The one outbound side effect is the invitation email, sent **inline during the HTTP
 request** via `Notification::route('mail', …)`. It is not queued, so a slow or failing mail
-server directly slows or fails the invite request.
+server directly slows or fails the invite request. [ADR-023](DECISIONS.md) settles that this
+should be rate-limited and queued; not yet implemented.
 
 ## 6. Agent and transport (INTENDED — not built)
 
@@ -283,9 +321,8 @@ parallel worker crashes with a bare "process crashed" message that does not name
 the cause. The limit is set in the `types:check` composer script; run PHPStan through that
 script rather than calling the binary directly.
 
-> **The working tree is not a git repository.** There is no version history, no branches,
-> and no rollback. This is a material gap for a project that maintains a decision log, and
-> is tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+This is a git repository on `main`; the decision log and the "update docs in the same
+change" rule in `CLAUDE.md` have actual history to attach to.
 
 ## 8. Constraints that shape future work
 

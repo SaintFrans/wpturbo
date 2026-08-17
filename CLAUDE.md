@@ -297,23 +297,59 @@ Stop and ask — with the options and your own recommendation — when:
 - there is a security/usability trade-off whose answer depends on a product choice that is
   not written down;
 - anything in [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) becomes relevant to the task
-  in hand — in particular **Q1, the Teams naming question**;
+  in hand;
 - two reasonable implementations have structurally different consequences for how the
   platform scales later.
 
 When in doubt, ask. Do not proceed on an assumption to save time.
 
-## The Teams naming question
+## Organizations, Clients, and Sites — settled
 
-The existing Teams feature may carry the wrong name for what it has to become — agency
-accounts, client organisations, or something else. **This is undecided.** Do not invent a
-name and do not refactor towards one. Details in
-[docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) (Q1). Raise it only when a task genuinely
-depends on it.
+Decided, see [ADR-025](docs/DECISIONS.md), [ADR-017](docs/DECISIONS.md) and
+[ADR-018](docs/DECISIONS.md):
+
+- **The tenancy boundary is `Organization`.** It is being renamed from `Team` — same single
+  boundary, no second tenancy level, no layer inside it. A user may belong to several
+  organizations, and that is a first-class scenario (a freelancer with their own practice plus
+  one or more agencies), **not** a way to subdivide one company's work. The earlier guidance to
+  name teams by function — `Front-end`, `Back-end`, `QA` — is **withdrawn**: it cannot work
+  alongside ADR-019, which gives every resource exactly one owning tenant.
+- **There is no personal team.** `is_personal` is removed. Registration creates a normal
+  organization named after the user, renameable from settings. Every user still always has at
+  least one: you cannot leave or delete your last one, and one is created for you if your last
+  membership is removed by someone else.
+- **`Client` is a new entity owned by an `Organization`**, not a tenancy boundary. It has no
+  membership or login of its own. `Site` (and later `Domain`, `Mailbox`) carries a nullable
+  `client_id` for grouping, reporting, and future billing/ticketing.
+- **The hosted resource is `Site`**, with a required `type` column (`wordpress` at launch).
+  Multi-process types get child `SiteService` rows; single-process types have none.
+
+Four more decisions are accepted and equally unimplemented:
+
+- **The URL identifier is a random, immutable `public_id`**, not a name-derived slug
+  ([ADR-027](docs/DECISIONS.md)). Renaming never changes a URL, organization names are free
+  text, and the reserved-word list from ADR-008 is retired. Reuse the same generator for
+  `Site`, `Server` and `Client` route keys.
+- **Admins manage members ranking below their own role** ([ADR-028](docs/DECISIONS.md)) —
+  Members only, never another Admin or the Owner, and never inviting above Member.
+- **Recovering an abandoned organization is a manual, documented procedure**
+  ([ADR-029](docs/DECISIONS.md)), not a self-service takeover.
+- **Per-member resource visibility is deliberately still open** ([Q13](docs/OPEN_QUESTIONS.md)).
+  Every member sees everything in their organization. If you are about to write a resource query
+  for `Site` or `Server`, read Q13 first — that is the moment the assumption sets.
+
+**None of this is implemented. The code still says `Team` everywhere.** Build new work against
+`Organization`, and follow [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md) — it
+carries the naming map, the file inventory, the six-phase order and the security review. Do it
+before `Site`, `Server` or `Client` exist; every new domain multiplies the work.
+
+Do not re-litigate these. Raise it again only if new information genuinely contradicts one
+of the ADRs above.
 
 ## Practical notes
 
-- **Not a git repository.** No history, no rollback. Be correspondingly careful.
+- **This is a git repository**, on `main`. Use it — commit meaningful changes, don't rely on
+  the decision log alone.
 - `CLAUDE.md` and `AGENTS.md` are kept identical, and both carry **two generated blocks**:
   the Boost guidelines at the top (rewritten by `boost:update`) and the Vite+ section at the
   bottom (owned by `vp`). Hand-written project guidance goes strictly between them.

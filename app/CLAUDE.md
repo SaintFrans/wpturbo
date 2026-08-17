@@ -3,10 +3,11 @@
 Scoped guidance for PHP work. The root [CLAUDE.md](../CLAUDE.md) has the working method and
 the security rule; this file covers how code in `app/` is structured.
 
-> `app/` is organised **by Laravel type, not by domain**. Whether to move to domain folders
-> once Servers and Sites arrive is unresolved — see
-> [docs/OPEN_QUESTIONS.md](../docs/OPEN_QUESTIONS.md) (Q3). Do not create a domain folder
-> without asking.
+> `app/` is currently organised **by Laravel type, not by domain**, but
+> [ADR-021](../docs/DECISIONS.md) has settled that it moves to domain folders
+> (`app/Teams/`, `app/Sites/`, `app/Servers/`, each with its own scoped `CLAUDE.md`) as the
+> hosting domain lands. The restructure has not happened yet — this file still describes the
+> type-first layout in place today.
 
 ## Where things go
 
@@ -21,7 +22,7 @@ the security rule; this file covers how code in `app/` is structured.
 | `Http/Requests/`    | Validation and request authorisation               | Custom rules go in `Rules/`, not inline closures                                          |
 | `Http/Responses/`   | Fortify response contract overrides                | Post-auth redirect targets                                                                |
 | `Models/`           | Eloquent models                                    | Full `@property` docblocks; `#[Fillable]` / `#[Hidden]` attributes                        |
-| `Notifications/`    | Outbound notifications                             | Currently sent synchronously — see Q8                                                     |
+| `Notifications/`    | Outbound notifications                             | Currently sent synchronously; ADR-023 requires `ShouldQueue` + a rate limiter, not yet built |
 | `Policies/`         | Authorisation policies                             | Ask for a `TeamPermission`, never a role string                                           |
 | `Rules/`            | Reusable validation rules                          |                                                                                           |
 

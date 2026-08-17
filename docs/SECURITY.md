@@ -2,6 +2,13 @@
 
 _Last verified against the codebase: 2026-08-15._
 
+> **Pending rename.** [ADR-025](DECISIONS.md) renames `Team` to `Organization`. Every control
+> below is renamed, **none is reconsidered** — ADR-006, ADR-007, ADR-008 and ADR-009 all keep
+> their reasoning and their behaviour. Three changes below do touch this document, and each is
+> reviewed in [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §7: removing `is_personal` from
+> two policy conditions, adding an auto-create fallback, and moving organization
+> administration inside the URL prefix. The rename is not implemented.
+
 ## 0. The rule
 
 **Security wins over functionality. Always. This is a rule, not a guideline.**
@@ -73,7 +80,10 @@ These are believed true and are relied upon. If one becomes false, the model bre
 3. **Fortify is correct.** Authentication, 2FA, recovery codes and WebAuthn are delegated to
    the framework team rather than hand-written (ADR-002).
 4. **The team slug is public.** It is in the URL and it appears in shared links. It is an
-   identifier, never a secret and never an authorisation factor.
+   identifier, never a secret and never an authorisation factor. This stays true under
+   [ADR-027](DECISIONS.md), which replaces it with a random `public_id`: being unguessable is a
+   privacy improvement, **not** a new authorisation factor. Membership is still checked on every
+   request, and possession of the identifier must never be treated as access.
 5. **The invitation code is secret but not sufficient.** It is unguessable, and it is
    deliberately not enough on its own (ADR-009).
 6. **Transport is TLS in production.** Not enforced in the application; assumed at the
@@ -129,13 +139,48 @@ similar against a live database.
 - Admins can update the team and manage invitations. They cannot change roles, remove
   members, or delete the team — so an Admin cannot escalate themselves or lock out the
   Owner.
+  **Reversed by [ADR-028](DECISIONS.md), not yet implemented.** Admins will be able to add,
+  remove and re-role members, and invite people — bounded to roles ranking **strictly below
+  their own**, so an Admin still cannot touch another Admin or the Owner, cannot promote
+  anyone to Admin or Owner, and cannot invite above Member. The reason for widening it is a
+  security one: today only the Owner can revoke access, so if the Owner is unreachable, a
+  departing employee keeps access to an organization holding administrative control of
+  customer servers. The bounded widening is safer than the bus factor it replaces. Note the
+  escalation path this must close is the *invited role*, not the invite action.
 - Owner is excluded from `TeamRole::assignable()`, so ownership cannot be granted through
   the member-role UI.
 - The team owner cannot be removed (`TeamMemberController::destroy`) and cannot leave
   (`TeamPolicy::leave`).
 - Personal teams cannot be deleted or left, guaranteeing every user retains a tenant.
+  **Changing under [ADR-025](DECISIONS.md):** the guarantee stays, enforced as "cannot leave or
+  delete your last organization" plus an auto-create when the last membership is removed by
+  someone else. Note that the current condition guards *two* things at once — personal teams
+  **and**, separately, the sole owner. Only the first is being replaced; deleting the clause
+  outright would widen both permissions.
 - Deleting a team requires typing its exact name (`DeleteTeamRequest`) — a confirmation
   control against destructive mis-clicks, not an authorisation control.
+
+### Recovering an abandoned organization ([ADR-029](DECISIONS.md))
+
+There is deliberately **no self-service takeover**. An organization whose Owner has disappeared
+— left the company, unreachable, died — is recovered by an operator, following this procedure
+every time rather than improvising it:
+
+1. Verify the requester's identity out of band. Not by email alone, since a compromised mailbox
+   is one of the scenarios this must survive.
+2. Confirm the requester already holds **Admin** in that organization. A recovery never grants
+   access to someone who did not already have it — it promotes, it does not admit.
+3. Notify the current Owner's address that a transfer has been requested.
+4. Wait. The notification is worthless without a window in which the Owner can object.
+5. Perform the transfer, and record who did it, when, for which organization, and on what
+   evidence.
+
+Deciding this in advance is the point: the alternative is inventing it under pressure with a
+customer waiting, which is exactly when steps 1 and 4 get skipped.
+
+**Two honest limitations.** There is no operator function yet, so this describes an intended
+process rather than an existing capability. And step 5 is a manual record — [G5](#4-known-gaps)
+still applies, and an ownership change is precisely the event an audit log should hold.
 
 ### Invitations
 
@@ -151,12 +196,13 @@ Recorded honestly. None is currently being exploited; all are real.
 | #   | Gap                                                                                | Impact                                                                                                                               | Tracked                 |
 | --- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
 | G1  | The entire agent, transport and server-credential model is undesigned              | The highest-consequence part of the platform has no security design at all                                                           | [Q2](OPEN_QUESTIONS.md) |
-| G2  | No rate limit on invitation creation; email sent synchronously                     | Any Owner or Admin can trigger unbounded outbound email — abuse vector and deliverability risk                                       | [Q8](OPEN_QUESTIONS.md) |
-| G3  | Nothing guarantees exactly one Owner per team, and ownership cannot be transferred | An abandoned team has no recovery path; ownerless teams are representable                                                            | [Q6](OPEN_QUESTIONS.md) |
-| G4  | Team soft-delete hard-deletes memberships                                          | A restored team is ownerless and unreachable                                                                                         | [Q5](OPEN_QUESTIONS.md) |
+| G2  | No rate limit on invitation creation; email sent synchronously                     | Any Owner or Admin can trigger unbounded outbound email — abuse vector and deliverability risk                                       | [ADR-023](DECISIONS.md) |
+| G3  | Nothing guarantees exactly one Owner per team, and ownership cannot be transferred | An abandoned team has no recovery path; ownerless teams are representable                                                            | [ADR-020](DECISIONS.md), [ADR-029](DECISIONS.md) |
+| G9  | Only the Owner can revoke a member's access                                        | If the Owner is unreachable, a departing employee retains access to customer infrastructure. Revocation has a bus factor of one      | [ADR-028](DECISIONS.md) |
+| G10 | The organization's name is in every URL                                            | `/some-agency/` can be probed to learn whether an agency is a customer — an inference surface, not a data leak                       | [ADR-027](DECISIONS.md) |
+| G4  | Team soft-delete hard-deletes memberships                                          | A restored team is ownerless and unreachable                                                                                         | [ADR-019](DECISIONS.md) |
 | G5  | No audit log                                                                       | No record of who invited, removed, promoted or deleted what. Once servers exist, no record of who instructed a destructive operation | —                       |
 | G6  | Invitation codes are stored in plaintext                                           | Database read access yields usable invitation links. Mitigated by the email-match requirement (ADR-009), not eliminated              | —                       |
-| G7  | No repository, no version control                                                  | No diff review, no rollback, no attribution of changes                                                                               | [Q7](OPEN_QUESTIONS.md) |
 | G8  | Production password policy is environment-conditional                              | If `APP_ENV` is ever wrong in production, the policy silently disappears                                                             | —                       |
 
 G5 deserves emphasis. An audit log is cheap to add now, while the only auditable events are
@@ -172,10 +218,14 @@ Non-negotiable, and applied whether or not the task mentions security.
    relationship (`$team->servers()->find($id)`), never loaded globally and then checked. A
    post-load check that anyone forgets is an isolation failure; a scoped query that anyone
    forgets is a 404.
-2. **Every tenant-owned table carries `team_id`** (or whatever the tenant key becomes after
-   [Q1](OPEN_QUESTIONS.md)). Ownership is a column, not an inference across joins.
-3. **Every tenant route lives inside the `EnsureTeamMembership` group.** No exceptions
-   without an ADR.
+2. **Every tenant-owned table carries `organization_id`.** `Client` (ADR-017), `Site` and
+   everything under it hang off `Organization`, not off each other. Ownership is a column, not
+   an inference across joins. (Named `team_id` until [ADR-025](DECISIONS.md) is executed —
+   build new tables against the target name and rename the existing column in the same change.)
+3. **Every tenant route lives inside the `EnsureOrganizationMembership` group.** No exceptions
+   without an ADR. This applies with particular force while
+   [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) phase 4 is moving routes between groups:
+   verify with `php artisan route:list` that nothing landed outside it.
 4. **Authorise on the server, every time.** Frontend permission booleans control display
    only. A policy check on the mutating request is mandatory even when the button is hidden.
 5. **Never expose a secret through an Inertia prop.** Everything in `share()` and every
