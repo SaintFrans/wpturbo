@@ -2,20 +2,19 @@
 
 _Last verified against the migrations and models: 2026-08-15._
 
-> **Pending rename.** [ADR-025](DECISIONS.md) renames `Team` to `Organization` and removes
-> `is_personal`. Not implemented — the tables below are what the migrations actually create
-> today. The target names and the migration rewrite are in
-> [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §2 and §3.3; the `is_personal` removal,
-> including the nine call sites that depend on it, is §4.
+> **Renamed on 2026-08-17 — the names below are stale.** The tables are now `organizations`,
+> `organization_members` and `organization_invitations`; the foreign key is `organization_id`;
+> the user column is `users.current_organization_id`; and `teams.slug` is now
+> `organizations.public_id`, a random twelve-character immutable identifier
+> ([ADR-025](DECISIONS.md), [ADR-027](DECISIONS.md)). `Membership` keeps its name. Classes moved
+> into domain subfolders per [ADR-026](DECISIONS.md) — `App\Models\Organizations\Organization`
+> and so on. **The prose and diagrams below have not been rewritten yet; read every "team" as
+> "organization".**
 >
-> Summary of what changes here: `teams` → `organizations`, `team_members` →
-> `organization_members`, `team_invitations` → `organization_invitations`, `team_id` →
-> `organization_id`, `users.current_team_id` → `users.current_organization_id`, and
-> `teams.is_personal` is dropped. `Membership` keeps its name.
->
-> Two further changes land in the same plan: [ADR-027](DECISIONS.md) replaces `slug` with a
-> random immutable `public_id`, and [ADR-028](DECISIONS.md) revises the permission table — Admin
-> gains member management, bounded to roles below its own. Both are flagged in place below.
+> Two things below are still literally true of the code and are not oversights:
+> `organizations.is_personal` still exists (phase 2), and the permission table is unchanged —
+> [ADR-028](DECISIONS.md)'s Admin member management is phase 6. Status per phase in
+> [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §1.
 
 Four tables carry the domain today: `users`, `teams`, `team_members`, `team_invitations`.
 Everything else in the database is framework scaffolding (cache, jobs, sessions, passkeys,
@@ -97,14 +96,21 @@ acceptable at the frequency team switching actually happens.
 many customers exist and invite enumeration. The slug also makes the URL readable, which
 matters when agency staff share links internally.
 
-**Replaced by [ADR-027](DECISIONS.md), not yet implemented.** `slug` becomes `public_id`: a
-random twelve-character token, generated once and **immutable**. The non-sequential argument
-above is kept and strengthened — a name-derived slug still leaks *which* customers exist, even if
-not how many, so `/some-agency/` could be probed. The readability argument is dropped, and that
-is a genuine loss, accepted deliberately: what the URL must guarantee is that it resolves to
-exactly one tenant, and that survives. It also removes the bug this table's `slug` row does not
-mention — `Organization::booted()` currently regenerates the slug on **rename**, silently
-breaking every existing link.
+**Replaced by [ADR-027](DECISIONS.md), implemented 2026-08-17.** `slug` is now `public_id`: a
+random twelve-character token from the alphabet `23456789abcdefghjkmnpqrstuvwxyz` (no `0`/`o`,
+no `1`/`l`/`i`), generated once in `creating` and **immutable** — there is no `updating` hook and
+no route to change it.
+
+The non-sequential argument above is kept and strengthened: a name-derived slug still leaked
+_which_ customers exist, even if not how many, so `/some-agency/` could be probed. The
+readability argument is dropped, and that is a genuine loss, accepted deliberately — what the URL
+must guarantee is that it resolves to exactly one tenant, and that survives.
+
+It also removed a bug the table above did not mention: `Organization::booted()` regenerated the
+slug on **rename**, silently breaking every existing link.
+
+The generator lives in `App\Concerns\Organizations\GeneratesPublicId` and is written for reuse by
+`Site`, `Server` and `Client`.
 
 **Why slug uniqueness includes soft-deleted teams.** `GeneratesUniqueTeamSlugs` queries
 `withTrashed()`. If a deleted team's slug were reissued, links and bookmarks pointing at

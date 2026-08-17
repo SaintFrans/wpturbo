@@ -338,10 +338,19 @@ Four more decisions are accepted and equally unimplemented:
   Every member sees everything in their organization. If you are about to write a resource query
   for `Site` or `Server`, read Q13 first — that is the moment the assumption sets.
 
-**None of this is implemented. The code still says `Team` everywhere.** Build new work against
-`Organization`, and follow [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md) — it
-carries the naming map, the file inventory, the six-phase order and the security review. Do it
-before `Site`, `Server` or `Client` exist; every new domain multiplies the work.
+**Half of this is implemented.** The rename and the `public_id` change landed on 2026-08-17
+(phases 1 and 5 of [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md)); `composer
+ci:check` is green on 98 tests. Four phases remain, and until they land the code still does the
+old thing in four specific places:
+
+- `is_personal` still exists, and registration still creates a "personal" organization (phase 2)
+- visiting a prefixed URL still writes `current_organization_id` (phase 3)
+- organization administration still sits at `/settings/organizations/…` (phase 4)
+- Admins still cannot manage members (phase 6)
+
+Do the rest before `Site`, `Server` or `Client` exist; every new domain multiplies the work. The
+plan carries the remaining steps, the security review, and a list of the six things the plan
+itself got wrong the first time.
 
 Do not re-litigate these. Raise it again only if new information genuinely contradicts one
 of the ADRs above.

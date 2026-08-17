@@ -80,7 +80,7 @@ The narrower need is different from the one ADR-019 rejected, and is not answere
 
 - `Client` ([ADR-017](DECISIONS.md)) groups sites but grants nothing.
 - `OrganizationRole` ([ADR-005](DECISIONS.md), [ADR-028](DECISIONS.md)) says what a member may
-  *do*, never on *which* resources.
+  _do_, never on _which_ resources.
 
 The traceable shape, if it is ever needed, is scoping a **membership** to a set of clients —
 empty meaning "all", which is every membership today — rather than a second grouping entity or a

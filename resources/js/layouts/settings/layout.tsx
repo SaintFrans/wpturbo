@@ -4,13 +4,13 @@ import { SectionNav } from '@/components/section-nav';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
-import { index as teams } from '@/routes/teams';
+import { index as organizations } from '@/routes/organizations';
 import type { NavItem } from '@/types';
 
 const settingsNavItems: NavItem[] = [
     { title: 'Profile', href: edit(), icon: null },
     { title: 'Security', href: editSecurity(), icon: null },
-    { title: 'Teams', href: teams(), icon: null },
+    { title: 'Organizations', href: organizations(), icon: null },
     { title: 'Appearance', href: editAppearance(), icon: null },
 ];
 

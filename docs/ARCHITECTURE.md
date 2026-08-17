@@ -6,16 +6,17 @@ This document separates **what is built** from **what is intended**. Every secti
 which it is. Intended architecture is written down so decisions are not re-litigated, not
 because it exists.
 
-> **Pending changes — read before trusting the names below.** Five accepted ADRs are not yet
-> implemented: [ADR-025](DECISIONS.md) renames `Team` to `Organization`, removes the personal
-> team and stops the implicit switch on prefix navigation; [ADR-026](DECISIONS.md) settles the
-> `app/` layout; [ADR-027](DECISIONS.md) replaces the slug with a random immutable `public_id`;
-> [ADR-028](DECISIONS.md) lets Admins manage members below their own role;
-> [ADR-029](DECISIONS.md) documents owner recovery. The execution plan for all of them is
-> [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md).
+> **Partly stale — read this first.** On 2026-08-17 the tenancy boundary was renamed from `Team`
+> to `Organization` ([ADR-025](DECISIONS.md)), `app/` was laid out per
+> [ADR-026](DECISIONS.md), and the URL identifier became a random immutable `public_id`
+> ([ADR-027](DECISIONS.md)). **Sections 2 to 5 below still use the old `Team` vocabulary and have
+> not been rewritten yet.** Read every "team" as "organization" and every "slug" as `public_id`.
 >
-> Everything below describes the code **as it stands today** and is accurate for it. Read every
-> "team" here as "organization" for anything you are about to build.
+> Three accepted decisions remain unimplemented: removing `is_personal` and the implicit
+> organization switch, and moving organization administration inside the URL prefix (all
+> ADR-025), plus [ADR-028](DECISIONS.md) on Admin member management and
+> [ADR-029](DECISIONS.md) on owner recovery. Status per phase is in
+> [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §1.
 
 ## 1. System overview
 
@@ -126,12 +127,27 @@ app/
 There are no `app/Jobs`, `app/Services`, or `app/Events` directories. Nothing is queued
 anywhere in the application, despite `QUEUE_CONNECTION=database` being configured.
 
-This is **settled by [ADR-026](DECISIONS.md)**, which was briefly reversed and reinstated: the
-type-first layout stays, and each type folder gains a subfolder per domain
-(`app/Models/Organizations/`, later `app/Actions/Sites/`). Files belonging to no domain —
-`User`, `Providers`, `Console`, Fortify actions, shared traits — stay flat. Half of that shape
-already exists (`Http/Controllers/Teams`, `Http/Requests/Teams`, `Actions/Teams`,
-`Notifications/Teams`); the rest lands with the rename.
+**This is now the actual layout** ([ADR-026](DECISIONS.md), which reversed ADR-021's domain-first
+plan). The tree above is the pre-rename state; today every domain-owned file sits in a subfolder
+of its type folder:
+
+```
+app/
+  Actions/Organizations/        CreateOrganization
+  Concerns/Organizations/       HasOrganizations, GeneratesPublicId
+  Data/Organizations/           UserOrganization, OrganizationPermissions
+  Enums/Organizations/          OrganizationRole, OrganizationPermission
+  Http/Controllers/Organizations/
+  Http/Requests/Organizations/
+  Models/Organizations/         Organization, Membership, OrganizationInvitation
+  Notifications/Organizations/
+  Policies/Organizations/       OrganizationPolicy
+  Rules/Organizations/          UniqueOrganizationInvitation, ValidOrganizationInvitation
+```
+
+`User`, `Providers`, `Console`, the Fortify actions, Inertia middleware and shared
+validation-rule traits stay flat — they belong to no domain. Factories follow the model
+namespace, so they live in `database/factories/Organizations/`.
 
 ### Frontend structure
 
@@ -205,14 +221,20 @@ Slugs are generated from the name and regenerated on rename, with a numeric suff
 collisions. `withTrashed()` is included in the uniqueness check, so a soft-deleted team's
 slug is never reissued.
 
-**This whole subsection becomes obsolete under [ADR-027](DECISIONS.md).** The first URL segment
-becomes a random, immutable twelve-character `public_id` instead of a name-derived slug, which
-removes the collision class entirely: a random token cannot shadow a route literal, so the
-reserved-word list and `TeamName`'s route-prefix check are deleted and organization names become
-free text. Two things go with it — the `-2` collision suffix, and the regeneration-on-rename that
-currently breaks every existing link when someone renames their organization. The `withTrashed()`
-rule is the one part that survives unchanged, and it must: it is what stops a stale bookmark
-resolving to a different tenant.
+**This subsection is obsolete — it describes code that no longer exists.** Under
+[ADR-027](DECISIONS.md), implemented 2026-08-17, the first URL segment is a random, immutable
+twelve-character `public_id`, not a name-derived slug. A random token cannot shadow a route
+literal, so `App\Rules\OrganizationName` was deleted along with its reserved-word list, and
+organization names are now free text — an organization may be called "Settings".
+
+Two behaviours went with it: the `-2` collision suffix, and the regeneration-on-rename that
+silently broke every existing link when someone renamed their organization. `Organization` now
+assigns `public_id` in `creating` only, with no `updating` counterpart.
+
+ADR-006's rule survives in `GeneratesPublicId`, and must: it is what stops a stale bookmark
+resolving to a different tenant. It is expressed as `withoutGlobalScope(SoftDeletingScope::class)`
+rather than `withTrashed()`, so the trait is equally usable by tenant resources that hard-delete —
+`Site`, `Server` and `Client` are meant to reuse it.
 
 ## 4. Authentication (BUILT)
 

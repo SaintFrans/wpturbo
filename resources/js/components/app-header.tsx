@@ -2,7 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import { Menu } from 'lucide-react';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { NavTabs } from '@/components/nav-tabs';
-import { TeamSwitcher } from '@/components/team-switcher';
+import { OrganizationSwitcher } from '@/components/organization-switcher';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,14 +37,16 @@ const supportNavItems: NavItem[] = [
 
 export function AppHeader() {
     const page = usePage();
-    const { auth, currentTeam } = page.props;
+    const { auth, currentOrganization } = page.props;
     const getInitials = useInitials();
-    const dashboardUrl = currentTeam ? dashboard(currentTeam.slug) : '/';
+    const dashboardUrl = currentOrganization
+        ? dashboard(currentOrganization.publicId)
+        : '/';
 
     // Tenant-scoped areas. Servers, Applications and DNS join this row as they are built
     // (ADR-016); sections *within* a resource belong in a SectionNav, not here.
     //
-    // Account settings and team administration are deliberately absent: both hang off the
+    // Account settings and organization administration are deliberately absent: both hang off the
     // avatar menu, keeping this row for the product itself.
     const areaNavItems: NavItem[] = [
         { title: 'Overview', href: dashboardUrl, icon: null },
@@ -116,7 +118,7 @@ export function AppHeader() {
                     </Link>
 
                     <div className="-ml-1 flex min-w-0 items-center sm:ml-0">
-                        <TeamSwitcher inHeader />
+                        <OrganizationSwitcher inHeader />
                     </div>
 
                     <div aria-hidden="true" className="flex-1" />

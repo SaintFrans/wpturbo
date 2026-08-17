@@ -1,13 +1,22 @@
 # `Team` → `Organization` — execution plan
 
-_Written 2026-08-17. Not yet executed. Nothing in this document is in the code._
+_Written 2026-08-17. **Phases 1 and 5 executed 2026-08-17.** Phases 2, 3, 4 and 6 remain._
 
 The reasoning is in [ADR-025](DECISIONS.md) through [ADR-029](DECISIONS.md). This document is
-the *what to change*, in an order that can be verified at each step.
+the _what to change_, in an order that can be verified at each step.
 
-**Do this before `Site`, `Server` and `Client` exist.** Today it touches 76 hand-written files
-across one feature that is fully covered by the Pest suite, and there is no production data —
-so the migrations are rewritten rather than stacked. Every new domain multiplies the work.
+**Do the rest before `Site`, `Server` and `Client` exist.** Every new domain multiplies the
+work.
+
+> **Executed so far.** `Team` is `Organization` everywhere — model, tables, enums, DTOs,
+> middleware, routes, URL segment, frontend types — laid out per [ADR-026](DECISIONS.md), and
+> the URL identifier is a random immutable `public_id` per [ADR-027](DECISIONS.md). Suite: 98
+> passing, `composer ci:check` green.
+>
+> **Still true of the code, and deliberately so:** `is_personal` still exists (phase 2),
+> visiting a prefixed URL still switches the current organization (phase 3), organization
+> administration still lives under `/settings/organizations/…` (phase 4), and Admins still
+> cannot manage members (phase 6).
 
 ---
 
@@ -17,14 +26,14 @@ Six phases. Each is independently verifiable, and each should be its own commit.
 them into one pass** — phase 1 is mechanical and its whole value is that the test suite proves
 nothing changed, which you lose the moment behaviour changes in the same commit.
 
-| Phase | Change                                                 | ADR     | Test expectation                                      |
-| ----- | ------------------------------------------------------ | ------- | ----------------------------------------------------- |
-| 1     | Pure rename, plus the folder move                      | 025/026 | Suite passes with identifiers renamed, no logic edits |
-| 2     | Remove `is_personal`, add the auto-create fallback     | 025     | Some tests rewritten; new tests added                 |
-| 3     | Remove the implicit organization switch                | 025     | One test rewritten; new test added                    |
-| 4     | Move organization administration inside the URL prefix | 025     | Route assertions updated                              |
-| 5     | `slug` → random immutable `public_id`                  | 027     | Slug-generation tests replaced                        |
-| 6     | Admins manage members below their own role             | 028     | Five negative tests added                             |
+| Phase | Change                                                 | ADR     | Status                            |
+| ----- | ------------------------------------------------------ | ------- | --------------------------------- |
+| 1     | Pure rename, plus the folder move                      | 025/026 | **Done** 2026-08-17               |
+| 2     | Remove `is_personal`, add the auto-create fallback     | 025     | Open                              |
+| 3     | Remove the implicit organization switch                | 025     | Open                              |
+| 4     | Move organization administration inside the URL prefix | 025     | Open                              |
+| 5     | `slug` → random immutable `public_id`                  | 027     | **Done** 2026-08-17, with phase 1 |
+| 6     | Admins manage members below their own role             | 028     | Open                              |
 
 Every phase after 1 is separable. If you want the rename landed and nothing else, phase 1 alone
 is a coherent stopping point.
@@ -42,51 +51,51 @@ Phase 6 is independent of the rename entirely and could be done first, against t
 
 ### Identifiers
 
-| Now                        | Becomes                            |
-| -------------------------- | ---------------------------------- |
-| `Team`                     | `Organization`                     |
-| `TeamInvitation`           | `OrganizationInvitation`           |
-| `TeamRole`                 | `OrganizationRole`                 |
-| `TeamPermission`           | `OrganizationPermission`           |
-| `TeamPolicy`               | `OrganizationPolicy`               |
-| `TeamName` (rule)          | `OrganizationName`                 |
-| `UniqueTeamInvitation`     | `UniqueOrganizationInvitation`     |
-| `ValidTeamInvitation`      | `ValidOrganizationInvitation`      |
-| `UserTeam` (DTO)           | `UserOrganization`                 |
-| `TeamPermissions` (DTO)    | `OrganizationPermissions`          |
-| `HasTeams`                 | `HasOrganizations`                 |
-| `GeneratesUniqueTeamSlugs` | `GeneratesUniqueOrganizationSlugs` |
-| `EnsureTeamMembership`     | `EnsureOrganizationMembership`     |
-| `SetTeamUrlDefaults`       | `SetOrganizationUrlDefaults`       |
-| `RedirectsToCurrentTeam`   | `RedirectsToCurrentOrganization`   |
-| `CreateTeam`               | `CreateOrganization`               |
-| `hasTeamPermission()`      | `hasOrganizationPermission()`      |
-| `belongsToTeam()`          | `belongsToOrganization()`          |
-| `switchTeam()`             | `switchOrganization()`             |
-| `ownsTeam()` / `teamRole()`| `ownsOrganization()` / `organizationRole()` |
+| Now                         | Becomes                                     |
+| --------------------------- | ------------------------------------------- |
+| `Team`                      | `Organization`                              |
+| `TeamInvitation`            | `OrganizationInvitation`                    |
+| `TeamRole`                  | `OrganizationRole`                          |
+| `TeamPermission`            | `OrganizationPermission`                    |
+| `TeamPolicy`                | `OrganizationPolicy`                        |
+| `TeamName` (rule)           | `OrganizationName`                          |
+| `UniqueTeamInvitation`      | `UniqueOrganizationInvitation`              |
+| `ValidTeamInvitation`       | `ValidOrganizationInvitation`               |
+| `UserTeam` (DTO)            | `UserOrganization`                          |
+| `TeamPermissions` (DTO)     | `OrganizationPermissions`                   |
+| `HasTeams`                  | `HasOrganizations`                          |
+| `GeneratesUniqueTeamSlugs`  | `GeneratesUniqueOrganizationSlugs`          |
+| `EnsureTeamMembership`      | `EnsureOrganizationMembership`              |
+| `SetTeamUrlDefaults`        | `SetOrganizationUrlDefaults`                |
+| `RedirectsToCurrentTeam`    | `RedirectsToCurrentOrganization`            |
+| `CreateTeam`                | `CreateOrganization`                        |
+| `hasTeamPermission()`       | `hasOrganizationPermission()`               |
+| `belongsToTeam()`           | `belongsToOrganization()`                   |
+| `switchTeam()`              | `switchOrganization()`                      |
+| `ownsTeam()` / `teamRole()` | `ownsOrganization()` / `organizationRole()` |
 
 `Membership` keeps its name — it is already domain-neutral.
 
 ### Database
 
-| Now                | Becomes                     |
-| ------------------ | --------------------------- |
-| `teams`            | `organizations`             |
-| `team_members`     | `organization_members`      |
-| `team_invitations` | `organization_invitations`  |
-| `*.team_id`        | `*.organization_id`         |
-| `users.current_team_id` | `users.current_organization_id` |
-| `teams.is_personal` | **dropped** (phase 2)      |
-| `teams.slug`       | `organizations.public_id` (phase 5) |
+| Now                     | Becomes                             |
+| ----------------------- | ----------------------------------- |
+| `teams`                 | `organizations`                     |
+| `team_members`          | `organization_members`              |
+| `team_invitations`      | `organization_invitations`          |
+| `*.team_id`             | `*.organization_id`                 |
+| `users.current_team_id` | `users.current_organization_id`     |
+| `teams.is_personal`     | **dropped** (phase 2)               |
+| `teams.slug`            | `organizations.public_id` (phase 5) |
 
 ### Routes and permissions
 
-| Now                   | Becomes                        |
-| --------------------- | ------------------------------ |
-| `{current_team}`      | `{current_organization}`       |
-| `{team}`              | `{organization}`               |
-| `teams.*` route names | `organizations.*`              |
-| `team:update` etc.    | `organization:update` etc.     |
+| Now                   | Becomes                    |
+| --------------------- | -------------------------- |
+| `{current_team}`      | `{current_organization}`   |
+| `{team}`              | `{organization}`           |
+| `teams.*` route names | `organizations.*`          |
+| `team:update` etc.    | `organization:update` etc. |
 
 ### Spelling
 
@@ -201,6 +210,33 @@ commit message — it is the one step that is not automatic for other machines.
 `OrganizationName` keeps ADR-008's reserved-word list unchanged in phase 1. **Phase 5 removes it
 entirely** ([ADR-027](DECISIONS.md)) — do not spend effort extending it in the meantime.
 
+### 3.4b What this plan got wrong — corrections from executing it
+
+Recorded because phases 2, 3, 4 and 6 will hit the same edges.
+
+1. **`bootstrap/` and `config/` were missing from the substitution scope in §3.1.** They must be
+   included: `bootstrap/app.php` registers `SetTeamUrlDefaults` in the middleware stack, and
+   nothing else catches it — the failure is 30 tests aborting with
+   `Target class [App\Http\Middleware\SetTeamUrlDefaults] does not exist`.
+2. **Factories must move too.** Laravel resolves a model's factory from the model's namespace, so
+   `App\Models\Organizations\Organization` looks for `Database\Factories\Organizations\OrganizationFactory`.
+   Moving the models without moving the factories breaks every test that uses one. They now live
+   in `database/factories/Organizations/`.
+3. **Short class names in docblocks do not follow a file move.** `app/Models/User.php` carries
+   `@property-read Organization|null $currentOrganization`; with `Organization` no longer in
+   `App\Models`, that silently resolves to a non-existent class. `tsc`, Pint and Pest all stay
+   green — only PHPStan catches it, and it surfaces as 15 errors across six unrelated files.
+   The same applies to the three models that referenced `User` without an import.
+4. **Run the substitution through `xargs`, not a shell `for` loop.** This project's shell is zsh,
+   which does not word-split an unquoted variable, so `for f in $files` passes the entire list as
+   one filename. It fails quietly enough to look like it worked.
+5. **The Vite manifest must be rebuilt.** Page components moved from `pages/teams/` to
+   `pages/organizations/`, so any test rendering one gets a 500 from
+   `ViteException: Unable to locate file in Vite manifest` until `vp build` runs.
+6. **Watch payload key casing.** `DashboardController` builds its invitation payload by hand; the
+   sweep turned `'slug'` into `'public_id'` while the frontend type expects `publicId`. The DTOs
+   are camelCase and the hand-built arrays must match them.
+
 ### 3.5 Verification
 
 ```bash
@@ -225,20 +261,20 @@ php artisan wayfinder:generate && vendor/bin/pint --dirty --format agent && comp
 
 Nine places depend on it. All nine must be resolved, not deleted:
 
-| File                                       | Current use                                        |
-| ------------------------------------------ | -------------------------------------------------- |
-| `Organization` model                       | `$fillable`, `$casts`, docblock property           |
-| `OrganizationPolicy::leave` (~line 48)     | `! $team->is_personal && …`                        |
-| `OrganizationPolicy::delete` (~line 98)    | `! $team->is_personal && …`                        |
-| `HasOrganizations::personalTeam()`         | the lookup itself                                  |
-| `CreateOrganization::handle()`             | `$isPersonal` parameter                            |
-| `CreateNewUser`                            | `handle($user, $user->name."'s Team", isPersonal: true)` |
-| `RedirectsToCurrentOrganization`           | `$user->currentTeam ?? $user->personalTeam()`      |
-| `OrganizationMemberController::destroy`    | `switchTeam($user->personalTeam())`                |
-| `OrganizationController::destroy`          | `switchTeam($affectedUser->personalTeam())`        |
-| `OrganizationController::edit`             | `'isPersonal' => $team->is_personal`               |
-| `UserOrganization` DTO + `organizations.ts`| `isPersonal` field                                 |
-| `pages/organizations/index.tsx`, `edit.tsx`| three `isPersonal` branches                        |
+| File                                        | Current use                                              |
+| ------------------------------------------- | -------------------------------------------------------- |
+| `Organization` model                        | `$fillable`, `$casts`, docblock property                 |
+| `OrganizationPolicy::leave` (~line 48)      | `! $team->is_personal && …`                              |
+| `OrganizationPolicy::delete` (~line 98)     | `! $team->is_personal && …`                              |
+| `HasOrganizations::personalTeam()`          | the lookup itself                                        |
+| `CreateOrganization::handle()`              | `$isPersonal` parameter                                  |
+| `CreateNewUser`                             | `handle($user, $user->name."'s Team", isPersonal: true)` |
+| `RedirectsToCurrentOrganization`            | `$user->currentTeam ?? $user->personalTeam()`            |
+| `OrganizationMemberController::destroy`     | `switchTeam($user->personalTeam())`                      |
+| `OrganizationController::destroy`           | `switchTeam($affectedUser->personalTeam())`              |
+| `OrganizationController::edit`              | `'isPersonal' => $team->is_personal`                     |
+| `UserOrganization` DTO + `organizations.ts` | `isPersonal` field                                       |
+| `pages/organizations/index.tsx`, `edit.tsx` | three `isPersonal` branches                              |
 
 ### 4.2 The replacement
 
@@ -317,7 +353,7 @@ non-members, and keeps the optional minimum-role check. What it stops doing is p
 The organization is then scoped **per request** from the URL. Two things must still work, so
 check both:
 
-1. `SetOrganizationUrlDefaults` must push the *URL's* organization into `URL::defaults()` for
+1. `SetOrganizationUrlDefaults` must push the _URL's_ organization into `URL::defaults()` for
    that request, not the stored one — otherwise links rendered on the page point at the wrong
    organization.
 2. `current_organization_id` is written on an explicit switch (`organizations.switch`, already
@@ -335,24 +371,24 @@ scenario ADR-025 is built around.
 
 Per ADR-025's simplification of ADR-022.
 
-| Now                                          | Becomes                                                    |
-| -------------------------------------------- | ---------------------------------------------------------- |
-| `GET /settings/teams`                        | `GET /organizations` — list and create, no tenant           |
-| `POST /settings/teams`                       | `POST /organizations`                                       |
-| `GET /settings/teams/{team}`                 | `GET /{current_organization}/settings`                      |
-| `PATCH /settings/teams/{team}`               | `PATCH /{current_organization}/settings`                    |
-| `DELETE /settings/teams/{team}`              | `DELETE /{current_organization}/settings`                   |
-| `POST /settings/teams/{team}/invitations`    | `POST /{current_organization}/settings/invitations`         |
-| `DELETE /…/invitations/{invitation}`         | `DELETE /{current_organization}/settings/invitations/{invitation}` |
-| `PATCH /…/members/{user}`                    | `PATCH /{current_organization}/settings/members/{user}`     |
-| `DELETE /…/members/{user}`                   | `DELETE /{current_organization}/settings/members/{user}`    |
-| `DELETE /settings/teams/{team}/leave`        | `DELETE /{current_organization}/settings/leave`             |
-| `POST /settings/teams/{team}/switch`         | `POST /organizations/{organization}/switch`                 |
+| Now                                       | Becomes                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------ |
+| `GET /settings/teams`                     | `GET /organizations` — list and create, no tenant                  |
+| `POST /settings/teams`                    | `POST /organizations`                                              |
+| `GET /settings/teams/{team}`              | `GET /{current_organization}/settings`                             |
+| `PATCH /settings/teams/{team}`            | `PATCH /{current_organization}/settings`                           |
+| `DELETE /settings/teams/{team}`           | `DELETE /{current_organization}/settings`                          |
+| `POST /settings/teams/{team}/invitations` | `POST /{current_organization}/settings/invitations`                |
+| `DELETE /…/invitations/{invitation}`      | `DELETE /{current_organization}/settings/invitations/{invitation}` |
+| `PATCH /…/members/{user}`                 | `PATCH /{current_organization}/settings/members/{user}`            |
+| `DELETE /…/members/{user}`                | `DELETE /{current_organization}/settings/members/{user}`           |
+| `DELETE /settings/teams/{team}/leave`     | `DELETE /{current_organization}/settings/leave`                    |
+| `POST /settings/teams/{team}/switch`      | `POST /organizations/{organization}/switch`                        |
 
 Notes:
 
-- `switch` stays outside the prefix deliberately: it is the one action taken *from* one
-  organization *about* another, so the target cannot be the prefix.
+- `switch` stays outside the prefix deliberately: it is the one action taken _from_ one
+  organization _about_ another, so the target cannot be the prefix.
 - `/settings/…` afterwards holds only `profile`, `security` and appearance — genuinely
   personal. That is the whole point of the simplification.
 - Both route groups keep `EnsureOrganizationMembership`. Moving routes must not drop it;
@@ -463,17 +499,17 @@ worse than having no note at all.
 
 Per `CLAUDE.md`, stated even where the conclusion is "no new risk".
 
-| Concern                                  | Assessment                                                                                                                                                          |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A missed rename leaves a route unguarded | The main risk. Middleware alias, route group and middleware class must move in one commit. Mitigated by the existing non-member 403 tests — keep them, do not skip.  |
-| `is_personal` removal widens permissions | Real, and specific: the clause in `OrganizationPolicy::leave` and `::delete` guards two things. §4.2 replaces rather than deletes it.                                 |
-| Auto-create runs on someone else's action| `EnsureUserHasOrganization` fires when an owner removes a member. It creates an organization owned by the *removed* user, never grants access to anything existing.  |
-| Per-request scoping (phase 3)            | Narrows an implicit write; it does not widen read access. Membership is still checked on every request by the same middleware.                                       |
-| Route move (phase 4)                     | Both groups keep `EnsureOrganizationMembership`. Verify with `php artisan route:list` that no organization route sits outside the group.                             |
-| Random `public_id` (phase 5)             | Net improvement. The customer's name leaves the URL, so `/some-agency/` can no longer be probed to learn whether an agency is a customer. ADR-006's never-reissue rule must survive the rewrite — keep `withTrashed()` in the uniqueness check. |
-| Dropping the reserved-word list (phase 5)| Safe **only** because the identifier is no longer name-derived. If name-derived identifiers ever return, ADR-008 must return with them. Verify by naming an organization `Settings` and confirming routes still resolve. |
-| Admin member management (phase 6)        | A deliberate widening, bounded by the rank rule. The escalation path is the *invited role*, not the action — see §8.2. Every test in §8.3 is a negative test; they are the control. |
-| Tenant isolation model                   | Unchanged. ADR-007 and ADR-009 are renamed, not reconsidered; ADR-006's rule survives phase 5 in a new form.                                                         |
+| Concern                                   | Assessment                                                                                                                                                                                                                                      |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A missed rename leaves a route unguarded  | The main risk. Middleware alias, route group and middleware class must move in one commit. Mitigated by the existing non-member 403 tests — keep them, do not skip.                                                                             |
+| `is_personal` removal widens permissions  | Real, and specific: the clause in `OrganizationPolicy::leave` and `::delete` guards two things. §4.2 replaces rather than deletes it.                                                                                                           |
+| Auto-create runs on someone else's action | `EnsureUserHasOrganization` fires when an owner removes a member. It creates an organization owned by the _removed_ user, never grants access to anything existing.                                                                             |
+| Per-request scoping (phase 3)             | Narrows an implicit write; it does not widen read access. Membership is still checked on every request by the same middleware.                                                                                                                  |
+| Route move (phase 4)                      | Both groups keep `EnsureOrganizationMembership`. Verify with `php artisan route:list` that no organization route sits outside the group.                                                                                                        |
+| Random `public_id` (phase 5)              | Net improvement. The customer's name leaves the URL, so `/some-agency/` can no longer be probed to learn whether an agency is a customer. ADR-006's never-reissue rule must survive the rewrite — keep `withTrashed()` in the uniqueness check. |
+| Dropping the reserved-word list (phase 5) | Safe **only** because the identifier is no longer name-derived. If name-derived identifiers ever return, ADR-008 must return with them. Verify by naming an organization `Settings` and confirming routes still resolve.                        |
+| Admin member management (phase 6)         | A deliberate widening, bounded by the rank rule. The escalation path is the _invited role_, not the action — see §8.2. Every test in §8.3 is a negative test; they are the control.                                                             |
+| Tenant isolation model                    | Unchanged. ADR-007 and ADR-009 are renamed, not reconsidered; ADR-006's rule survives phase 5 in a new form.                                                                                                                                    |
 
 **Test the negative case** (SECURITY.md §5.10): the tests proving a non-member gets a 403 are
 the ones that matter here. If any of them needs its logic rewritten during phase 1, treat that
@@ -485,18 +521,18 @@ as a signal that the rename changed behaviour.
 
 Per ADR-011, in the same commit as the code — not afterwards.
 
-| File                                       | What changes                                                                                        |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `docs/ARCHITECTURE.md`                     | §2 code organisation (ADR-026 tree), §3 tenancy model **and the whole "name collisions with route prefixes" subsection, which phase 5 makes obsolete**, §4 registration, §8 constraint 2 |
-| `docs/DATA_MODEL.md`                       | Entity map, all three tables, `is_personal` removal, `slug` → `public_id` and its rationale, the permission table (ADR-028), DTO names |
-| `docs/SECURITY.md`                         | §2 assumption 1, §3 tenant isolation, **§3 privilege boundaries — currently states the opposite of ADR-028**, §5 rules 2 and 3, and the ADR-029 recovery procedure |
-| `docs/OPEN_QUESTIONS.md`                   | Q11, Q12 and Q13 already added; check nothing new is opened                                          |
-| `README.md`                                | Status section wording                                                                               |
-| `CLAUDE.md` / `AGENTS.md`                  | Between the two generated blocks only — never inside them (ADR-010, ADR-012)                         |
-| `app/CLAUDE.md`                            | Folder-structure guidance per ADR-026                                                                |
-| `app/Http/Controllers/Teams/CLAUDE.md`     | Moves with its directory to `app/Http/Controllers/Organizations/CLAUDE.md`                           |
-| `resources/js/CLAUDE.md`                   | Type and component names                                                                             |
-| This file                                  | Delete once executed — it describes work, not the system                                             |
+| File                                   | What changes                                                                                                                                                                             |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/ARCHITECTURE.md`                 | §2 code organisation (ADR-026 tree), §3 tenancy model **and the whole "name collisions with route prefixes" subsection, which phase 5 makes obsolete**, §4 registration, §8 constraint 2 |
+| `docs/DATA_MODEL.md`                   | Entity map, all three tables, `is_personal` removal, `slug` → `public_id` and its rationale, the permission table (ADR-028), DTO names                                                   |
+| `docs/SECURITY.md`                     | §2 assumption 1, §3 tenant isolation, **§3 privilege boundaries — currently states the opposite of ADR-028**, §5 rules 2 and 3, and the ADR-029 recovery procedure                       |
+| `docs/OPEN_QUESTIONS.md`               | Q11, Q12 and Q13 already added; check nothing new is opened                                                                                                                              |
+| `README.md`                            | Status section wording                                                                                                                                                                   |
+| `CLAUDE.md` / `AGENTS.md`              | Between the two generated blocks only — never inside them (ADR-010, ADR-012)                                                                                                             |
+| `app/CLAUDE.md`                        | Folder-structure guidance per ADR-026                                                                                                                                                    |
+| `app/Http/Controllers/Teams/CLAUDE.md` | Moves with its directory to `app/Http/Controllers/Organizations/CLAUDE.md`                                                                                                               |
+| `resources/js/CLAUDE.md`               | Type and component names                                                                                                                                                                 |
+| This file                              | Delete once executed — it describes work, not the system                                                                                                                                 |
 
 The three docs carrying a `_Last verified against the codebase_ date` need that date updated,
 or the line becomes a claim the file no longer earns.
@@ -505,16 +541,7 @@ or the line becomes a claim the file no longer earns.
 
 ## 11. Checklist
 
-**Phase 1 — rename**
-
-- [ ] `git mv` the 28 PHP and 7 frontend paths in §3.2
-- [ ] Delete `resources/js/actions/App/Http/Controllers/Teams/` and `resources/js/routes/teams/`
-- [ ] Run the five substitutions in §3.1, in order, over the listed scope
-- [ ] Rewrite both migrations (§3.3), keeping `is_personal` for now
-- [ ] `grep -ri '[Tt]eam' app database routes tests resources/js` → no hits
-- [ ] `php artisan migrate:fresh && php artisan test --compact` → green, no logic edits
-- [ ] `php artisan wayfinder:generate`
-- [ ] `vendor/bin/pint --dirty --format agent` then `composer ci:check`
+**Phase 1 — rename** ✅ done 2026-08-17
 
 **Phase 2 — `is_personal`**
 
@@ -537,15 +564,7 @@ or the line becomes a claim the file no longer earns.
 - [ ] `php artisan route:list` shows no organization route outside the middleware group
 - [ ] Wayfinder regenerated; `tsc` clean
 
-**Phase 5 — `public_id`**
-
-- [ ] Column renamed; unique, indexed, immutable after create
-- [ ] The `updating` slug-regeneration hook in `Organization::booted()` is **deleted**
-- [ ] `GeneratesPublicId` written as a reusable trait, retrying against `withTrashed()`
-- [ ] Reserved-word list and route-prefix check removed from `OrganizationName`
-- [ ] Old slug tests deleted, not adapted; the five tests in §7.3 added
-- [ ] `slug` → `publicId` in the DTO and `organizations.ts` together
-- [ ] Manual check: create an organization called `Settings`, confirm routing still works
+**Phase 5 — `public_id`** ✅ done 2026-08-17, executed together with phase 1
 
 **Phase 6 — Admin member management**
 

@@ -12,7 +12,7 @@ Activate the `inertia-react-development` skill for Inertia client-side patterns 
 | --------------------- | ----------------------------------------------------------------------------- |
 | `pages/`              | Inertia page components. Path mirrors the string in `Inertia::render()`       |
 | `layouts/`            | `app/`, `auth/`, `settings/` shells                                           |
-| `components/`         | Feature components (modals, `team-switcher`)                                  |
+| `components/`         | Feature components (modals, `organization-switcher`)                          |
 | `components/ui/`      | shadcn primitives on the React Aria base. Check here before writing a new one |
 | `hooks/`              | Shared React hooks                                                            |
 | `types/`              | Hand-maintained shared types                                                  |
@@ -31,13 +31,13 @@ file produces a change that silently reverts.
 ### Never hardcode a URL
 
 ```text
-import { edit } from '@/actions/App/Http/Controllers/Teams/TeamController';
+import { edit } from '@/actions/App/Http/Controllers/Organizations/OrganizationController';
 
 // correct
-<Link href={edit({ team: team.slug })}>Settings</Link>
+<Link href={edit({ organization: organization.slug })}>Settings</Link>
 
 // wrong
-<Link href={`/settings/teams/${team.slug}`}>Settings</Link>
+<Link href={`/settings/organizations/${organization.slug}`}>Settings</Link>
 ```
 
 Route changes should surface as TypeScript errors, not as runtime 404s. That is the entire
@@ -85,14 +85,14 @@ cost two invisible delete buttons after the React Aria migration.
 `tests/Feature/DialogStructureTest.php` asserts against that shape.
 
 A menu item cannot also be a dialog trigger. Open the dialog from state instead — see
-`team-switcher.tsx` driving `CreateTeamModal` through `isOpen`/`onOpenChange`.
+`organization-switcher.tsx` driving `CreateOrganizationModal` through `isOpen`/`onOpenChange`.
 
 ### Navigation has two levels (ADR-016)
 
-| Level    | Where                             | Holds                                                                                            |
-| -------- | --------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Areas    | Row two of `app-header`           | Tenant-scoped areas: Overview today; later Servers / Applications / DNS. Not settings or teams   |
-| Sections | `<SectionNav>` beside the content | The sections _of one resource_: a server's facilities, an application's tabs, the settings pages |
+| Level    | Where                             | Holds                                                                                                  |
+| -------- | --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Areas    | Row two of `app-header`           | Tenant-scoped areas: Overview today; later Servers / Applications / DNS. Not settings or organizations |
+| Sections | `<SectionNav>` beside the content | The sections _of one resource_: a server's facilities, an application's tabs, the settings pages       |
 
 The shell components, all reusable:
 
@@ -155,9 +155,9 @@ A section of a single resource **never** goes in the top nav. `SectionNav` is co
 purpose — different application types will present different sections, which a fixed global
 nav could not express.
 
-**Account settings and team administration reach the app through the avatar menu**, not the
-tab row. `UserMenuContent` links to Profile; `SettingsLayout` carries Security, Teams and
-Appearance. Teams was tried as its own area and moved back — it is touched rarely enough
+**Account settings and organization administration reach the app through the avatar menu**, not the
+tab row. `UserMenuContent` links to Profile; `SettingsLayout` carries Security, Organizations and
+Appearance. Organizations was tried as its own area and moved back — it is touched rarely enough
 that a permanent top-level slot overstates it.
 
 Adding an area means adding it to `areaNavItems` **and** to the mobile sheet in the same
@@ -174,14 +174,14 @@ to them and expect it to appear.
 
 ### The tenant is in the URL
 
-Tenant-scoped routes carry the team slug as their first segment. `SetTeamUrlDefaults` fills
-it server-side, so Wayfinder helpers for team-prefixed routes usually need no explicit team
+Tenant-scoped routes carry the organization slug as their first segment. `SetOrganizationUrlDefaults` fills
+it server-side, so Wayfinder helpers for organization-prefixed routes usually need no explicit organization
 argument. Do not construct these URLs by hand.
 
 ### Permission booleans are for display only
 
 ```text
-{permissions.canDeleteTeam && <DeleteTeamModal team={team} />}
+{permissions.canDeleteOrganization && <DeleteOrganizationModal organization={organization} />}
 ```
 
 This controls what is **shown**. It is not a security control — the server re-checks the
@@ -190,11 +190,11 @@ permission to skip a server-side check, and never assume a hidden control cannot
 
 ### PHP DTOs and TypeScript types are paired by hand
 
-`resources/js/types/teams.ts` mirrors `app/Data/UserTeam.php` and
-`app/Data/TeamPermissions.php`. Nothing generates one from the other, so they drift
+`resources/js/types/organizations.ts` mirrors `app/Data/UserOrganization.php` and
+`app/Data/OrganizationPermissions.php`. Nothing generates one from the other, so they drift
 silently. **Change both in the same commit.**
 
-Note the existing inconsistency: `UserTeam` serialises camelCase (`isPersonal`), while
+Note the existing inconsistency: `UserOrganization` serialises camelCase (`isPersonal`), while
 inline controller arrays use snake_case (`role_label`). Match whatever the endpoint you are
 touching already emits rather than "fixing" it in passing.
 
@@ -203,8 +203,8 @@ touching already emits rather than "fixing" it in passing.
 - Forms use `useForm` or the `<Form>` component; follow the sibling page.
 - Flash messages arrive via `Inertia::flash('toast', …)` and are surfaced by
   `use-flash-toast`, rendered with `sonner`. Do not build a second notification path.
-- Destructive actions get a confirmation modal — see `delete-team-modal`,
-  `remove-member-modal`, `leave-team-modal`.
+- Destructive actions get a confirmation modal — see `delete-organization-modal`,
+  `remove-member-modal`, `leave-organization-modal`.
 - Deferred props get a skeleton or pulsing empty state, never a bare spinner-less gap.
 - Compose from `components/ui/` before writing new markup.
 

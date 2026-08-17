@@ -131,7 +131,7 @@ it.
 - The rank check lives in `OrganizationPolicy` (`updateMember`, `removeMember`, `inviteMember`),
   not in the permission map. Permissions stay plain role→capability booleans per ADR-005; the
   comparison is an additional guard, so the enum keeps reading as a specification.
-- `invitation:create` must validate the *invited role* against the actor's level, not only the
+- `invitation:create` must validate the _invited role_ against the actor's level, not only the
   action. An Admin inviting an Admin is the escalation path this closes.
 - `member:add` and `invitation:create` now map identically for both roles. They are kept
   separate because a future "add an existing platform user directly" flow would use the first
@@ -192,7 +192,7 @@ removes all four at once:
 explicitly valued readability, on the grounds that agency staff share links internally, and
 `/k7m3xq9v2rft/sites/12` tells a reader nothing about which organization they are about to open.
 
-That cost is accepted because the property ADR-007 actually needed is *unambiguity* — one URL
+That cost is accepted because the property ADR-007 actually needed is _unambiguity_ — one URL
 resolves to exactly one tenant, so a shared link never shows the reader someone else's data —
 and that is fully preserved. Readability was a convenience layered on top. The organization
 switcher and the page header still name the organization on arrival, so a reader who opens the
@@ -209,7 +209,7 @@ link is not confused; they simply cannot tell in advance from the URL alone.
 - **ADR-008 is retired.** `OrganizationName` keeps ordinary validation — length, character set,
   required — but the reserved-word list and the route-prefix collision check are removed, because
   the condition that made them load-bearing no longer exists. Note the inversion: validation moves
-  from *user input* to *generated output*, and the generator has nothing to validate against.
+  from _user input_ to _generated output_, and the generator has nothing to validate against.
 - **The same generator is reused for `Site`, `Server` and `Client` route keys**, settling
   DATA_MODEL.md's "route keys for tenant resources should be non-sequential" constraint with one
   shared implementation rather than a rule each new table has to remember.
@@ -244,14 +244,14 @@ enums are flat.
 **Why** — ADR-021's argument — that nothing in a type-first tree represents "this is the Sites
 feature" — is a scaling argument, and the tree is not at that scale. Counted on 2026-08-17:
 
-| Folder                       | Files |
-| ---------------------------- | ----- |
-| `app/Http/Requests`          | 9     |
-| `app/Http/Controllers`       | 7     |
-| `app/Models`, `app/Concerns` | 4     |
-| `app/Actions`, `app/Rules`   | 3     |
-| `app/Data`, `app/Enums`      | 2     |
-| `app/Policies`, `app/Notifications` | 1 |
+| Folder                              | Files |
+| ----------------------------------- | ----- |
+| `app/Http/Requests`                 | 9     |
+| `app/Http/Controllers`              | 7     |
+| `app/Models`, `app/Concerns`        | 4     |
+| `app/Actions`, `app/Rules`          | 3     |
+| `app/Data`, `app/Enums`             | 2     |
+| `app/Policies`, `app/Notifications` | 1     |
 
 Thirty-six files. Against that, domain-first costs friction with everything the ecosystem
 assumes: `make:` command defaults, Larastan, the Boost guidelines' "stick to existing
@@ -307,7 +307,7 @@ with it, and they are the reason this is an ADR rather than a rename commit:
    switch, or on landing at `/`.
 
 **Alternatives** — Keep the name `Team` and only remove the personal-team concept; rename to
-`Account`; keep `Team` as a layer *inside* `Organization`, as Laravel Forge does.
+`Account`; keep `Team` as a layer _inside_ `Organization`, as Laravel Forge does.
 
 **Why** — `Team` was never a second layer: it is already the tenancy boundary, the resource
 owner and the permission scope. The name was the problem, and it caused two concrete
@@ -357,16 +357,16 @@ against a tenant that might not be there. The auto-create keeps ADR-004's actual
 **Consequences**
 
 - The full rename map, file inventory, semantic changes and execution order are in
-  [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md). This ADR records *why*; that document
-  records *what to change*.
+  [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md). This ADR records _why_; that document
+  records _what to change_.
 - **ADR-004 is superseded.** `is_personal` and `personalTeam()` are gone. Code may still
   assume a current organization resolves for any authenticated user — that invariant is
   preserved, by different means.
 - **ADR-017 is partially reversed.** The free-form and functional organization-naming guidance
   is withdrawn: an organization is one organization, normally one per real-world entity. The
   `Client` entity, and everything else ADR-017 decided about it, is unchanged.
-- **ADR-022 is simplified.** Its two-shape rule and the "does the tenant *have* it, or does the
-  user *configure* it" test are no longer needed. Everything belonging to the organization,
+- **ADR-022 is simplified.** Its two-shape rule and the "does the tenant _have_ it, or does the
+  user _configure_ it" test are no longer needed. Everything belonging to the organization,
   members included, lives under `/{current_organization}/…`. `/settings/…` becomes purely
   personal: profile, security, appearance. The one exception is the organization list-and-create
   page, which belongs to no single tenant and stays outside the prefix.
@@ -378,7 +378,7 @@ against a tenant that might not be there. The auto-create keeps ADR-004's actual
   row and still survives logout and device changes; only the implicit write on prefix
   navigation is removed. Following a shared link no longer repoints the reader's other tabs.
 - ADR-005, ADR-006, ADR-007, ADR-008, ADR-009, ADR-019, ADR-020 and ADR-023 are unaffected in
-  substance by *this* entry. They are renamed, not reconsidered — though ADR-005 is later
+  substance by _this_ entry. They are renamed, not reconsidered — though ADR-005 is later
   amended by ADR-028, and ADR-006/007/008 by ADR-027.
 - Two questions this creates about future social login are recorded as
   [Q11 and Q12](OPEN_QUESTIONS.md) rather than answered here.
@@ -403,7 +403,7 @@ defer the dependency decision entirely and rely on `tsc`, lint, the build, and m
 checking, as today.
 
 **Why** — The React Aria migration (ADR-015) rewrote all three of these flows and was
-verified by type-checking plus a manual look at the *unauthenticated* pages — the
+verified by type-checking plus a manual look at the _unauthenticated_ pages — the
 authenticated, highest-consequence flows were never exercised. `tsc`, lint and the Pest
 backend suite all stay green if a dialog silently stops opening; only a real browser
 assertion catches that. Scoping to three flows keeps the Playwright dependency and CI time
@@ -469,9 +469,9 @@ notification, is cheaper than inventing it under pressure later.
 **2026-08-17** · **Status**: Accepted, **simplified by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed)**
 
 > The prefix rule for tenant resources stands. The split does not: organization administration
-> — general settings, members, invitations — moves *inside* the prefix, at
+> — general settings, members, invitations — moves _inside_ the prefix, at
 > `/{current_organization}/settings/…`. `/settings/…` becomes purely personal. The
-> "does the tenant *have* it, or does the user *configure* it" test is therefore no longer
+> "does the tenant _have_ it, or does the user _configure_ it" test is therefore no longer
 > needed and should not be applied to new features. The only route that stays outside the
 > prefix is the organization list-and-create page, which belongs to no single tenant.
 
@@ -503,7 +503,7 @@ pattern, and every one of them should copy the resource shape, not the administr
 - `/settings/teams/…` is not a precedent for tenant resources, despite taking a `{team}`
   parameter — it is the one deliberate exception, not the pattern to copy.
 - If a future feature is genuinely ambiguous between the two, the test is: does the URL
-  describe something the tenant *has*, or something the user is *configuring about* the
+  describe something the tenant _has_, or something the user is _configuring about_ the
   tenant?
 
 ---
@@ -606,7 +606,7 @@ added after team setup needing manual permission attention.
 **Why** — The Ploi shape is what is already built and tested in this codebase
 (`current_team_id`, the team switcher, `EnsureTeamMembership`); adopting it for the hosting
 domain costs nothing new. The RunCloud shape only pays for itself once a real need exists for
-the *same* resource to be worked on by two different teams with different permissions —
+the _same_ resource to be worked on by two different teams with different permissions —
 nothing in this product today creates that need, and building the grant-table and
 Account-layer machinery speculatively is exactly the premature abstraction `CLAUDE.md` warns
 against. Ploi's own admission that bolting sharing on later caused friction is a reason to
@@ -620,7 +620,7 @@ upfront.
 - `Client` (ADR-017) is owned by `Team`, not by any higher entity — consistent with `Team`
   owning every other resource.
 - If real usage later proves a resource needs multi-team visibility, the traceable path is
-  additive: a `team_resource` grant table recording *additional* teams with access, with
+  additive: a `team_resource` grant table recording _additional_ teams with access, with
   `team_id` remaining the resource's "home" team. This does not require revisiting this ADR's
   core model, only extending it.
 - `TeamController::destroy` must be changed to soft-delete memberships, invitations, and (once
@@ -647,7 +647,7 @@ ships.
 **Why** — "Site" matches the product's own language, the pitch, and every named competitor
 (Forge, FlyWP, Ploi) — "Application" would fight that vocabulary for no gain, since a `type`
 column gets the same extensibility either way. The multi-container question is answered by
-separating *domain grouping* from *process composition*: a Site stays one row per
+separating _domain grouping_ from _process composition_: a Site stays one row per
 domain-facing thing regardless of how many containers back it, so a docker-compose app is
 still addressable and billable as a single Site while its internals live as child
 `SiteService` rows. This avoids two failure modes: forcing every WordPress site to carry
@@ -659,7 +659,7 @@ rows that don't match how the customer thinks about "the app".
 - `sites` table, not `applications`. ADR-016's top-level area, named "Applications" there,
   is renamed to "Sites" to match — the one existing decision this reopens.
 - `sites.type` is required at creation and drives the creation flow, config screen, and
-  whether any `SiteService` rows exist.  
+  whether any `SiteService` rows exist.
 - `site_services` is populated only for types that declare more than one process; simple
   types (`wordpress`, `static`) have zero rows and are queried as a single unit.
 - Backups, domains, deployments, certificates and metrics carry a foreign key to `Site`, not
@@ -685,7 +685,7 @@ creates as many Teams as it wants, named however it likes (functional groupings 
 convention). This resolves [Q1](OPEN_QUESTIONS.md) — there is no second tenancy level, and
 "Team" is not renamed.
 
-A new `Client` entity is added *inside* a Team: a lightweight record (name, contact details)
+A new `Client` entity is added _inside_ a Team: a lightweight record (name, contact details)
 owned by a Team, with no membership, login or permission model of its own. `Site` gets a
 nullable `client_id` FK scoped to the same Team; domains and mailboxes will get the same FK
 when they exist. This follows the WPMUDEV Hub pattern — sites are tagged to a client for
@@ -697,7 +697,7 @@ servers/sites directly (the two-level model Q1 raised as a possibility); folding
 into Team itself by convention only.
 
 **Why** — The actual requirement is Forge-style free-naming teams (colleagues grouped
-however an agency likes, not necessarily one-per-client) *plus* WPMUDEV-style client tagging
+however an agency likes, not necessarily one-per-client) _plus_ WPMUDEV-style client tagging
 for billing and reporting. A second tenancy level would force "one tenant per client" on
 every agency, which directly contradicts wanting teams named by function rather than by
 client. Modelling Client as an owned, non-tenancy entity inside Team gets the
@@ -1069,7 +1069,7 @@ invited email means cancelling and re-inviting.
 
 **Reconstructed** · **Status**: **Retired by [ADR-027](#adr-027--the-tenant-url-identifier-is-a-random-immutable-public-id)**
 
-> The premise is gone, not the reasoning. This rule was load-bearing *because* the first URL
+> The premise is gone, not the reasoning. This rule was load-bearing _because_ the first URL
 > segment was derived from the organization's name. Under ADR-027 that segment is a random
 > twelve-character token, which cannot collide with any route literal, so organization names no
 > longer need a reserved-word list at all. `OrganizationName` keeps ordinary validation.
@@ -1133,7 +1133,7 @@ before the pattern is copied further.
 
 > The core rule stands and is why ADR-027 keeps `withTrashed()` in the uniqueness check: a
 > retired identifier is never reissued, so a stale bookmark can never resolve to a different
-> tenant. What changes is what the identifier *is* — a random `public_id` rather than a slug
+> tenant. What changes is what the identifier _is_ — a random `public_id` rather than a slug
 > derived from the name. The "occasional ugly `acme-2`" this entry accepted as the price no
 > longer occurs, and neither does the silent link breakage that renaming caused.
 
