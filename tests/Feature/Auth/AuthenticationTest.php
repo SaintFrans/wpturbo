@@ -64,7 +64,7 @@ test('passkey login response redirects to the current organization dashboard', f
     // promises a Response, so reaching for a JsonResponse-only method depends on an
     // implementation detail Fortify does not guarantee.
     expect(json_decode((string) $response->getContent(), true))
-        ->toHaveKey('redirect', route('dashboard', ['current_organization' => $user->personalOrganization()->public_id]));
+        ->toHaveKey('redirect', route('dashboard', ['organization' => $user->personalOrganization()->handle]));
 });
 
 test('users with two factor enabled are redirected to two factor challenge', function () {

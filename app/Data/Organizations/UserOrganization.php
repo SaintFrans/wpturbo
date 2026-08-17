@@ -7,7 +7,7 @@ readonly class UserOrganization
     public function __construct(
         public int $id,
         public string $name,
-        public string $publicId,
+        public string $handle,
         public bool $isPersonal,
         public ?string $role,
         public ?string $roleLabel,

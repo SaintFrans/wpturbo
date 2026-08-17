@@ -49,7 +49,7 @@ export default function InviteMemberModal({
         <Dialog isOpen={open} onOpenChange={handleOpenChange}>
             <Form
                 key={String(open)}
-                {...storeInvitation.form(organization.publicId)}
+                {...storeInvitation.form(organization.handle)}
                 className="space-y-6"
                 onSuccess={() => onOpenChange(false)}
             >

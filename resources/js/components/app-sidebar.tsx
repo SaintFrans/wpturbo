@@ -21,7 +21,7 @@ import type { NavItem } from '@/types';
 export function AppSidebar() {
     const page = usePage();
     const dashboardUrl = page.props.currentOrganization
-        ? dashboard(page.props.currentOrganization.publicId)
+        ? dashboard(page.props.currentOrganization.handle)
         : '/';
 
     const mainNavItems: NavItem[] = [

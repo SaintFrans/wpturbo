@@ -36,7 +36,7 @@ class OrganizationInvitationController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Invitation sent.')]);
 
-        return to_route('organizations.edit', ['organization' => $organization->public_id]);
+        return to_route('organizations.edit', ['organization' => $organization->handle]);
     }
 
     /**
@@ -52,7 +52,7 @@ class OrganizationInvitationController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Invitation cancelled.')]);
 
-        return to_route('organizations.edit', ['organization' => $organization->public_id]);
+        return to_route('organizations.edit', ['organization' => $organization->handle]);
     }
 
     /**

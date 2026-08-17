@@ -17,10 +17,7 @@ class SetOrganizationUrlDefaults
     public function handle(Request $request, Closure $next): Response
     {
         if ($currentOrganization = $request->user()?->currentOrganization) {
-            URL::defaults([
-                'current_organization' => $currentOrganization->public_id,
-                'organization' => $currentOrganization->public_id,
-            ]);
+            URL::defaults(['organization' => $currentOrganization->handle]);
         }
 
         return $next($request);

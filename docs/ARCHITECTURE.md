@@ -8,13 +8,17 @@ because it exists.
 
 > **Partly stale — read this first.** On 2026-08-17 the tenancy boundary was renamed from `Team`
 > to `Organization` ([ADR-025](DECISIONS.md)), `app/` was laid out per
-> [ADR-026](DECISIONS.md), and the URL identifier became a random immutable `public_id`
-> ([ADR-027](DECISIONS.md)). **Sections 2 to 5 below still use the old `Team` vocabulary and have
-> not been rewritten yet.** Read every "team" as "organization" and every "slug" as `public_id`.
+> [ADR-026](DECISIONS.md), and the URL identifier became a `handle` — seeded from the name once,
+> then editable on its own ([ADR-030](DECISIONS.md), which superseded ADR-027's random
+> `public_id`). **Sections 2 to 5 below still use the old `Team` vocabulary and have not been
+> rewritten yet.** Read every "team" as "organization" and every "slug" as `handle`.
 >
-> Three accepted decisions remain unimplemented: removing `is_personal` and the implicit
-> organization switch, and moving organization administration inside the URL prefix (all
-> ADR-025), plus [ADR-028](DECISIONS.md) on Admin member management and
+> Tenant routes now sit behind a literal `org/` segment ([ADR-031](DECISIONS.md)); `/settings/…`
+> is exclusively personal and is presented as "Account", while the organization's own settings are
+> an area in the header's second row with General and Members sections.
+>
+> Still unimplemented: removing `is_personal` and the implicit organization switch (both
+> ADR-025), [ADR-028](DECISIONS.md) on Admin member management, and
 > [ADR-029](DECISIONS.md) on owner recovery. Status per phase is in
 > [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §1.
 
@@ -134,7 +138,7 @@ of its type folder:
 ```
 app/
   Actions/Organizations/        CreateOrganization
-  Concerns/Organizations/       HasOrganizations, GeneratesPublicId
+  Concerns/Organizations/       HasOrganizations, GeneratesHandle
   Data/Organizations/           UserOrganization, OrganizationPermissions
   Enums/Organizations/          OrganizationRole, OrganizationPermission
   Http/Controllers/Organizations/
@@ -169,7 +173,11 @@ commit.
 
 ## 3. Tenancy model (BUILT)
 
-Tenancy is **URL-prefix scoped by team slug**, enforced by middleware.
+Tenancy is **URL-prefix scoped by organization handle**, enforced by middleware.
+
+> Since [ADR-031](DECISIONS.md) the shape is `/org/{organization}/…`. The literal `org/` segment is
+> what allowed ADR-008's reserved-word list to be deleted: a handle can no longer shadow an
+> application route. `/settings/…` is now exclusively personal.
 
 ### How a request is scoped
 
@@ -221,20 +229,18 @@ Slugs are generated from the name and regenerated on rename, with a numeric suff
 collisions. `withTrashed()` is included in the uniqueness check, so a soft-deleted team's
 slug is never reissued.
 
-**This subsection is obsolete — it describes code that no longer exists.** Under
-[ADR-027](DECISIONS.md), implemented 2026-08-17, the first URL segment is a random, immutable
-twelve-character `public_id`, not a name-derived slug. A random token cannot shadow a route
-literal, so `App\Rules\OrganizationName` was deleted along with its reserved-word list, and
-organization names are now free text — an organization may be called "Settings".
+**This subsection is rewritten by [ADR-030](DECISIONS.md), implemented 2026-08-17.** The first URL
+segment is a `handle`, seeded from the name at creation and never regenerated on rename. It can be
+changed through its own field, which is an explicit action that does break existing links — unlike
+the old behaviour, where renaming broke them silently.
 
-Two behaviours went with it: the `-2` collision suffix, and the regeneration-on-rename that
-silently broke every existing link when someone renamed their organization. `Organization` now
-assigns `public_id` in `creating` only, with no `updating` counterpart.
+`App\Rules\Organizations\OrganizationHandle` carries the reserved-word list, so ADR-008 is back
+in a better form: it guards the handle rather than the name, and an organization may legitimately
+be called "Settings".
 
-ADR-006's rule survives in `GeneratesPublicId`, and must: it is what stops a stale bookmark
-resolving to a different tenant. It is expressed as `withoutGlobalScope(SoftDeletingScope::class)`
-rather than `withTrashed()`, so the trait is equally usable by tenant resources that hard-delete —
-`Site`, `Server` and `Client` are meant to reuse it.
+ADR-006's rule survives in `GeneratesHandle` and now spans three sources — the live column,
+soft-deleted rows, and `organization_handles`, which records every handle ever held. That last one
+is what stops a changed handle being claimed by another tenant.
 
 ## 4. Authentication (BUILT)
 

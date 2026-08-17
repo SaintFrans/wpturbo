@@ -32,7 +32,7 @@ export default function RemoveMemberModal({
             return;
         }
 
-        router.visit(destroyMember([organization.publicId, member.id]), {
+        router.visit(destroyMember([organization.handle, member.id]), {
             onStart: () => setProcessing(true),
             onFinish: () => setProcessing(false),
             onSuccess: () => onOpenChange(false),

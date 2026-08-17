@@ -12,9 +12,9 @@ trait RedirectsToCurrentOrganization
     {
         $organization = $this->currentOrganization($request);
 
-        URL::defaults(['current_organization' => $organization->public_id]);
+        URL::defaults(['organization' => $organization->handle]);
 
-        return "/{$organization->public_id}{$redirect}";
+        return "/org/{$organization->handle}{$redirect}";
     }
 
     protected function currentOrganization(Request $request): Organization

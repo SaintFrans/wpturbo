@@ -7,12 +7,17 @@ _Last verified against the codebase: 2026-08-15._
 > `EnsureTeamMembership` as `EnsureOrganizationMembership`. **No control was weakened by the
 > rename**, and the full review is in [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §9.
 >
-> One control genuinely changed: [ADR-027](DECISIONS.md) replaced the name-derived slug with a
-> random immutable `public_id`. This **closes G10** — the customer's name no longer appears in
-> any URL, so `/some-agency/` can no longer be probed to learn whether an agency is a customer.
-> It also retired ADR-008: `App\Rules\OrganizationName` and its reserved-word list are deleted,
-> because a random token cannot shadow a route literal. Being unguessable is a privacy
-> improvement, **not** an authorisation factor — see assumption 4.
+> The URL identifier is a `handle`, seeded from the name once and then editable on its own
+> ([ADR-030](DECISIONS.md), which superseded ADR-027's random `public_id`). Two things follow.
+> **G10 is withdrawn rather than closed**: it claimed a readable identifier let an attacker probe
+> `/some-agency/` for customers, and it does not — the membership middleware returns a single
+> indistinguishable 403. And ADR-008's reserved-word list is back, now guarding the **handle**
+> instead of the name, in `App\Rules\Organizations\OrganizationHandle`.
+>
+> A handle is never reissued: uniqueness spans the live column, soft-deleted rows and
+> `organization_handles`, which records every handle ever held. That table is what keeps a
+> _changed_ handle from being claimed by another tenant and inheriting its stale bookmarks.
+> The handle is public and is never an authorisation factor — see assumption 4.
 >
 > Still unimplemented, and both flagged in place below: the `is_personal` removal with its
 > auto-create fallback, and [ADR-028](DECISIONS.md)'s Admin member management (**G9 is open**).
@@ -89,9 +94,9 @@ These are believed true and are relied upon. If one becomes false, the model bre
    the framework team rather than hand-written (ADR-002).
 4. **The team slug is public.** It is in the URL and it appears in shared links. It is an
    identifier, never a secret and never an authorisation factor. This stays true under
-   [ADR-027](DECISIONS.md), which replaces it with a random `public_id`: being unguessable is a
-   privacy improvement, **not** a new authorisation factor. Membership is still checked on every
-   request, and possession of the identifier must never be treated as access.
+   [ADR-030](DECISIONS.md), which renames it `handle`. It is readable and guessable by design;
+   membership is checked on every request, and possession of a handle must never be treated as
+   access.
 5. **The invitation code is secret but not sufficient.** It is unguessable, and it is
    deliberately not enough on its own (ADR-009).
 6. **Transport is TLS in production.** Not enforced in the application; assumed at the
@@ -101,7 +106,7 @@ These are believed true and are relied upon. If one becomes false, the model bre
 
 ### Tenant isolation
 
-`EnsureTeamMembership` resolves the team from the `current_team` or `team` route parameter
+`EnsureOrganizationMembership` resolves the organization from the single `organization` route parameter
 and aborts 403 unless the authenticated user has a membership row for it. It optionally
 enforces a minimum role. It runs on the team-prefixed route group and on the team settings
 routes.
@@ -201,17 +206,17 @@ invitation verifies it belongs to the team in the URL before the policy check.
 
 Recorded honestly. None is currently being exploited; all are real.
 
-| #   | Gap                                                                                | Impact                                                                                                                               | Tracked                                          |
-| --- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| G1  | The entire agent, transport and server-credential model is undesigned              | The highest-consequence part of the platform has no security design at all                                                           | [Q2](OPEN_QUESTIONS.md)                          |
-| G2  | No rate limit on invitation creation; email sent synchronously                     | Any Owner or Admin can trigger unbounded outbound email — abuse vector and deliverability risk                                       | [ADR-023](DECISIONS.md)                          |
-| G3  | Nothing guarantees exactly one Owner per team, and ownership cannot be transferred | An abandoned team has no recovery path; ownerless teams are representable                                                            | [ADR-020](DECISIONS.md), [ADR-029](DECISIONS.md) |
-| G4  | Team soft-delete hard-deletes memberships                                          | A restored team is ownerless and unreachable                                                                                         | [ADR-019](DECISIONS.md)                          |
-| G5  | No audit log                                                                       | No record of who invited, removed, promoted or deleted what. Once servers exist, no record of who instructed a destructive operation | —                                                |
-| G6  | Invitation codes are stored in plaintext                                           | Database read access yields usable invitation links. Mitigated by the email-match requirement (ADR-009), not eliminated              | —                                                |
-| G8  | Production password policy is environment-conditional                              | If `APP_ENV` is ever wrong in production, the policy silently disappears                                                             | —                                                |
-| G9  | Only the Owner can revoke a member's access                                        | If the Owner is unreachable, a departing employee retains access to customer infrastructure. Revocation has a bus factor of one      | [ADR-028](DECISIONS.md)                          |
-| G10 | ~~The organization's name is in every URL~~                                        | **Closed 2026-08-17.** Replaced by a random `public_id`, so the URL reveals nothing about who the customer is                        | [ADR-027](DECISIONS.md)                          |
+| #   | Gap                                                                                | Impact                                                                                                                                                                                                            | Tracked                                          |
+| --- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| G1  | The entire agent, transport and server-credential model is undesigned              | The highest-consequence part of the platform has no security design at all                                                                                                                                        | [Q2](OPEN_QUESTIONS.md)                          |
+| G2  | No rate limit on invitation creation; email sent synchronously                     | Any Owner or Admin can trigger unbounded outbound email — abuse vector and deliverability risk                                                                                                                    | [ADR-023](DECISIONS.md)                          |
+| G3  | Nothing guarantees exactly one Owner per team, and ownership cannot be transferred | An abandoned team has no recovery path; ownerless teams are representable                                                                                                                                         | [ADR-020](DECISIONS.md), [ADR-029](DECISIONS.md) |
+| G4  | Team soft-delete hard-deletes memberships                                          | A restored team is ownerless and unreachable                                                                                                                                                                      | [ADR-019](DECISIONS.md)                          |
+| G5  | No audit log                                                                       | No record of who invited, removed, promoted or deleted what. Once servers exist, no record of who instructed a destructive operation                                                                              | —                                                |
+| G6  | Invitation codes are stored in plaintext                                           | Database read access yields usable invitation links. Mitigated by the email-match requirement (ADR-009), not eliminated                                                                                           | —                                                |
+| G8  | Production password policy is environment-conditional                              | If `APP_ENV` is ever wrong in production, the policy silently disappears                                                                                                                                          | —                                                |
+| G9  | Only the Owner can revoke a member's access                                        | If the Owner is unreachable, a departing employee retains access to customer infrastructure. Revocation has a bus factor of one                                                                                   | [ADR-028](DECISIONS.md)                          |
+| G10 | ~~The organization's name is in every URL~~                                        | **Withdrawn 2026-08-17 — this was never a real gap.** `EnsureOrganizationMembership` returns one indistinguishable 403 for "no such organization" and "not a member", so a readable handle enables no enumeration | [ADR-030](DECISIONS.md)                          |
 
 G5 deserves emphasis. An audit log is cheap to add now, while the only auditable events are
 team membership changes, and expensive to retrofit once servers, sites and destructive

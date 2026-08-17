@@ -88,7 +88,7 @@ trait HasOrganizations
         $this->update(['current_organization_id' => $organization->id]);
         $this->setRelation('currentOrganization', $organization);
 
-        URL::defaults(['current_organization' => $organization->public_id]);
+        URL::defaults(['organization' => $organization->handle]);
 
         return true;
     }
@@ -152,7 +152,7 @@ trait HasOrganizations
         return new UserOrganization(
             id: $organization->id,
             name: $organization->name,
-            publicId: $organization->public_id,
+            handle: $organization->handle,
             isPersonal: $organization->is_personal,
             role: $role?->value,
             roleLabel: $role?->label(),

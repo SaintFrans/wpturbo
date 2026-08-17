@@ -42,7 +42,7 @@ export default function DeleteOrganizationModal({
         <Dialog isOpen={open} onOpenChange={handleOpenChange}>
             <Form
                 key={String(open)}
-                {...destroy.form(organization.publicId)}
+                {...destroy.form(organization.handle)}
                 className="space-y-6"
                 onSuccess={() => handleOpenChange(false)}
             >

@@ -1,24 +1,20 @@
 import type { PropsWithChildren } from 'react';
 import { SectionLayout } from '@/components/section-layout';
 import { SectionNav } from '@/components/section-nav';
-import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
-import { index as organizations } from '@/routes/organizations';
 import type { NavItem } from '@/types';
 
-const settingsNavItems: NavItem[] = [
+const accountNavItems: NavItem[] = [
     { title: 'Profile', href: edit(), icon: null },
     { title: 'Security', href: editSecurity(), icon: null },
-    { title: 'Organizations', href: organizations(), icon: null },
-    { title: 'Appearance', href: editAppearance(), icon: null },
 ];
 
-export default function SettingsLayout({ children }: PropsWithChildren) {
+export default function AccountLayout({ children }: PropsWithChildren) {
     return (
         <SectionLayout
-            title="Settings"
-            nav={<SectionNav items={settingsNavItems} label="Settings" />}
+            title="Account"
+            nav={<SectionNav items={accountNavItems} label="Account" />}
         >
             {children}
         </SectionLayout>

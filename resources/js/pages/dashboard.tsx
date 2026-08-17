@@ -39,13 +39,13 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
 }
 
 Dashboard.layout = (props: {
-    currentOrganization?: { publicId: string } | null;
+    currentOrganization?: { handle: string } | null;
 }) => ({
     breadcrumbs: [
         {
             title: 'Overview',
             href: props.currentOrganization
-                ? dashboard(props.currentOrganization.publicId)
+                ? dashboard(props.currentOrganization.handle)
                 : '/',
         },
     ],

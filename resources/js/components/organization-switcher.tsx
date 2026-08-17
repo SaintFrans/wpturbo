@@ -29,13 +29,13 @@ export function OrganizationSwitcher({
     const currentOrganization = page.props.currentOrganization;
     const organizations = page.props.organizations ?? [];
     const dashboardUrl = currentOrganization
-        ? dashboard(currentOrganization.publicId)
+        ? dashboard(currentOrganization.handle)
         : '/';
 
     const switchOrganization = (organization: Organization) => {
-        const previousOrganizationSlug = currentOrganization?.publicId;
+        const previousOrganizationSlug = currentOrganization?.handle;
 
-        router.visit(switchMethod(organization.publicId), {
+        router.visit(switchMethod(organization.handle), {
             onFinish: () => {
                 if (
                     !previousOrganizationSlug ||
@@ -51,10 +51,7 @@ export function OrganizationSwitcher({
 
                 if (currentUrl.includes(segment)) {
                     router.visit(
-                        currentUrl.replace(
-                            segment,
-                            `/${organization.publicId}`,
-                        ),
+                        currentUrl.replace(segment, `/${organization.handle}`),
                         {
                             replace: true,
                         },

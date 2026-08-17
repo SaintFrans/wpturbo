@@ -26,6 +26,133 @@ Format:
 
 ---
 
+## ADR-031 — Tenant routes sit behind a literal `org/` segment
+
+**2026-08-17** · **Status**: Accepted. Amends
+[ADR-007](#adr-007--tenancy-is-scoped-by-team-slug-in-the-url-prefix); **retires
+[ADR-008](#adr-008--team-names-are-validated-against-reserved-route-prefixes) for good**;
+completes [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed)'s
+simplification of [ADR-022](#adr-022--tenant-resources-use-the-current_team-prefix-team-administration-stays-at-settings).
+
+**Decision** — Everything belonging to one organization moves from `/{handle}/…` to
+`/org/{handle}/…`, matching Laravel Forge. Listing and creating organizations sits at `/org`.
+`/settings/…` is now exclusively personal — profile, security, appearance — and organization
+administration lives at `/org/{handle}/settings`.
+
+There is one route parameter, `{organization}`, everywhere. `{current_organization}` is gone.
+
+**Alternatives** — Keep the handle in the first segment and keep the reserved-word list; use a
+shorter marker such as `/o/`; put organizations under `/organizations/{handle}`.
+
+**Why — this is a security simplification, not a cosmetic one.** With the handle in the first
+segment, a handle could shadow an application route, which is the entire reason ADR-008 existed.
+[SECURITY.md](SECURITY.md) described that rule as load-bearing: it _must keep running_ on create
+and rename, or the failure is a cross-tenant routing bug rather than an error. A control that
+must not be forgotten is strictly worse than a condition that cannot arise, and
+[SECURITY.md](SECURITY.md) §0 says to buy the safer option even when it costs more. Here it costs
+one URL segment.
+
+Three consequences follow, and the third is the one users feel:
+
+1. **The reserved-word list is deleted**, not relocated. ~330 entries and the route-prefix scan
+   are gone from `OrganizationHandle`, which now checks shape and availability only.
+2. **New top-level routes are free forever.** Adding `/billing` no longer requires proving that
+   no customer already holds `billing`, and never requires migrating one who does.
+3. **Handles stop being rejected for reasons nobody can explain.** An agency called Support,
+   Cloud, Design or Marketing was previously refused its obvious handle. `org/settings` is now a
+   perfectly ordinary URL.
+
+`/o/` was rejected as too terse to read as a word; `/organizations/{handle}` as needlessly long
+on every tenant URL. `/org` matches Forge, which this product's users already use.
+
+**Stated cost.** URLs gain a segment: `/org/oui-do-digital/sites/12`. ADR-007's wording — "first
+path segment" — is amended to "first segment after `org/`". Its actual requirement, that a URL
+resolves unambiguously to exactly one tenant, is untouched.
+
+**Consequences**
+
+- `{current_organization}` is removed. There was never a behavioural reason for two parameter
+  names; the split existed only because organization administration lived outside the prefix.
+- **A behaviour change worth naming:** because every tenant route is now prefixed, visiting an
+  organization's _settings_ switches your current organization, which it previously did not.
+  That is consistent — you navigated into that organization's context — and it disappears
+  entirely with phase 3, which removes the implicit switch.
+- `RedirectsToCurrentOrganization` builds `/org/{handle}{$redirect}`; post-login, post-2FA and
+  post-verification redirects all land inside the prefix.
+- `/settings/…` holds nothing tenant-scoped. The Organizations entry moved out of the settings
+  section navigation and into the avatar menu, where ADR-016 already put account-level items.
+- Anything added under `/org/{organization}/…` inherits `EnsureOrganizationMembership` from the
+  group. Adding a tenant route outside that group remains the one way to lose tenant isolation.
+
+---
+
+## ADR-030 — The tenant URL identifier is a name-seeded, separately editable handle
+
+**2026-08-17** · **Status**: Accepted. **Supersedes [ADR-027](#adr-027--the-tenant-url-identifier-is-a-random-immutable-public-id)**;
+revives [ADR-008](#adr-008--team-names-are-validated-against-reserved-route-prefixes) in modified form.
+
+**Decision** — `organizations.public_id` becomes `organizations.handle`. It is **seeded from the
+name once, at creation** (`Str::slug`, numeric suffix on collision) and then leads its own life:
+
+1. **Renaming never touches it.** There is no `updating` hook keyed on the name.
+2. **It can be changed**, through its own field on the settings screen, validated separately from
+   the name.
+3. **It is never reissued.** A new `organization_handles` table records every handle a tenant has
+   ever held; uniqueness is checked against it as well as against the live column and
+   soft-deleted rows.
+
+Reserved-word validation returns, but on the **handle**, not the name. An organization may be
+called "Settings"; its handle may not be `settings`.
+
+**Alternatives** — Keep ADR-027's random `public_id`; seed from the name but make the handle
+immutable, avoiding the history table.
+
+**Why — and this reverses an argument I made badly.** ADR-027 traded away URL readability, which
+[ADR-007](#adr-007--tenancy-is-scoped-by-team-slug-in-the-url-prefix) and DATA_MODEL.md both
+valued, and justified it largely on enumeration: that `/some-agency/` could be probed to learn
+whether an agency is a customer. **That was wrong.** `EnsureOrganizationMembership` aborts with a
+single 403 covering "no user", "no such organization" and "not a member", and unauthenticated
+requests are redirected to login before reaching it. The three cases are indistinguishable, so
+there is no enumeration channel to close. What remains true — the organization's name is visible
+in shared links, browser history and referrer headers — concerns a name that is on the agency's
+own website. That is not worth an unreadable URL.
+
+The real defect ADR-027 fixed was never the readable slug. It was the **coupling**: the slug was
+regenerated on rename, so renaming silently invalidated every bookmark, shared link and mail
+archive. Laravel Forge, which this product's users already use, solves exactly that by
+decoupling — the name seeds the handle once, and the handle is edited separately when it needs to
+be. That keeps the fix and returns the readability.
+
+**Why the history table, which is the real cost.** Once a handle is mutable, changing it releases
+the old one. If another organization could then claim `acme`, every stale bookmark to `/acme/…`
+would begin resolving to a different tenant — precisely the cross-tenant hazard
+[ADR-006](#adr-006--slug-uniqueness-includes-soft-deleted-teams) exists to prevent, reintroduced
+through a new door. `organization_handles` closes it, and later gives redirects for free.
+
+An immutable name-seeded handle was the cheaper alternative and would have avoided that table
+entirely. It was rejected for one reason: a collision leaves you permanently stuck on `acme-2`
+with no way to fix it, and the fix is the whole point of Forge's second field.
+
+**Consequences**
+
+- **Stated cost:** changing a handle _does_ break existing links. Unlike the old behaviour this is
+  explicit, user-initiated and warned about in the UI, rather than a side effect of renaming.
+  Nothing redirects yet — `organization_handles` is the seam where that would live.
+- `App\Concerns\Organizations\GeneratesPublicId` becomes `GeneratesHandle`. It exposes
+  `handleIsUnavailable()` publicly so the validation rule and the generator ask one question with
+  one answer.
+- **ADR-008 returns as `App\Rules\Organizations\OrganizationHandle`**, with its reserved-word list
+  restored from history. It is a better rule than the original: ADR-008 constrained the
+  organization's _name_, which was always the wrong field. Names are now free text.
+- **ADR-006 is unchanged in substance and strengthened in reach**: uniqueness spans the live
+  column, soft-deleted rows, and every historical handle.
+- ADR-027's other claim survives: the identifier is public and is never an authorisation factor.
+  A readable handle makes that more obviously true, not less.
+- Handles are recorded on every save, so the table is written on create and on change alike.
+- The same shape is what `Site`, `Server` and `Client` should use if they want readable keys.
+
+---
+
 ## ADR-029 — Recovering an abandoned organization is a manual, documented procedure
 
 **2026-08-17** · **Status**: Accepted. Closes the involuntary case
@@ -145,7 +272,16 @@ it.
 
 ## ADR-027 — The tenant URL identifier is a random, immutable public ID
 
-**2026-08-17** · **Status**: Accepted. Supersedes the slug-generation half of
+**2026-08-17** · **Status**: **Superseded by [ADR-030](#adr-030--the-tenant-url-identifier-is-a-name-seeded-separately-editable-handle)**
+
+> Reversed the same day, after implementation. **Its central argument does not hold:** the claim
+> that a name-derived identifier lets an attacker probe `/some-agency/` to discover customers is
+> false, because `EnsureOrganizationMembership` returns one indistinguishable 403 for "no such
+> organization" and "not a member". The readability this entry traded away was therefore paid for
+> with a benefit that did not exist. What it got right — that renaming must never change the URL,
+> and that an identifier is never reissued — is carried forward by ADR-030.
+
+**Original decision** — Supersedes the slug-generation half of
 [ADR-006](#adr-006--slug-uniqueness-includes-soft-deleted-teams); retires
 [ADR-008](#adr-008--team-names-are-validated-against-reserved-route-prefixes); amends
 [ADR-007](#adr-007--tenancy-is-scoped-by-team-slug-in-the-url-prefix).
@@ -466,7 +602,7 @@ notification, is cheaper than inventing it under pressure later.
 
 ## ADR-022 — Tenant resources use the `/{current_team}/…` prefix; team administration stays at `/settings/…`
 
-**2026-08-17** · **Status**: Accepted, **simplified by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed)**
+**2026-08-17** · **Status**: **Superseded by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed) and [ADR-031](#adr-031--tenant-routes-sit-behind-a-literal-org-segment)**
 
 > The prefix rule for tenant resources stands. The split does not: organization administration
 > — general settings, members, invitations — moves _inside_ the prefix, at
@@ -723,11 +859,31 @@ and leaves ADR-005 (permissions) and ADR-007 (team-scoped URLs) completely untou
 
 **2026-08-15** · **Status**: Accepted, **amended by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed)**
 
-> One substantive amendment: organization administration moves inside the tenant prefix, so
-> the last bullet about team administration living at `/settings/teams/…` no longer holds —
-> only the list-and-create page stays outside. The switcher in row one is confirmed rather
-> than changed: multi-organization membership is now an endorsed scenario. All "team"
-> language below reads as "organization"; that part is editorial.
+> **Two amendments, both implemented 2026-08-17.**
+>
+> **Organization settings became an area.** Row two now holds Overview and Settings, and the
+> bullet below saying team administration keeps no top-level slot is reversed. This is the third
+> position on that question, so the reasoning matters more than the answer: the earlier reversal
+> was correct _while_ team administration lived at `/settings/teams/…`, an account-level location.
+> [ADR-031](#adr-031--tenant-routes-sit-behind-a-literal-org-segment) moved it to
+> `/org/{organization}/settings`, which makes it tenant-scoped — and this ADR's own rule is that
+> tenant-scoped areas go in row two. The location changed, so the answer changed with it.
+>
+> Its sections — General and Members today, Roles and Billing later — are a `SectionNav`, exactly
+> as this entry prescribes.
+>
+> **The organizations list page was removed rather than relocated.** Creating an organization
+> happens in the header switcher and deleting one on its General tab, which left the list with
+> nothing to do; `/org` redirects into the user's own organization instead. This is why the empty
+> state that ADR-016 lists as a reusable component has one fewer consumer than expected.
+>
+> **Account settings are still not an area**, and are now named "Account" rather than "Settings",
+> since "Settings" is what the organization area is called. It carries Profile and Security.
+> Appearance left it for a theme toggle in the avatar menu — a per-device display preference is
+> not a settings page, and putting it in the menu makes it reachable from anywhere.
+>
+> The switcher in row one is confirmed rather than changed: multi-organization membership is an
+> endorsed scenario. All "team" language below reads as "organization"; that part is editorial.
 
 **Decision** — The application shell is a persistent two-row top navigation, not a global
 sidebar:
@@ -1067,13 +1223,14 @@ invited email means cancelling and re-inviting.
 
 ## ADR-008 — Team names are validated against reserved route prefixes
 
-**Reconstructed** · **Status**: **Retired by [ADR-027](#adr-027--the-tenant-url-identifier-is-a-random-immutable-public-id)**
+**Reconstructed** · **Status**: **Retired for good by [ADR-031](#adr-031--tenant-routes-sit-behind-a-literal-org-segment)**
 
-> The premise is gone, not the reasoning. This rule was load-bearing _because_ the first URL
-> segment was derived from the organization's name. Under ADR-027 that segment is a random
-> twelve-character token, which cannot collide with any route literal, so organization names no
-> longer need a reserved-word list at all. `OrganizationName` keeps ordinary validation.
-> Do not reintroduce the list without first reintroducing name-derived identifiers.
+> Twice reversed, now settled. ADR-027 retired this rule on a mistaken premise; ADR-030 revived it
+> against the **handle** rather than the name, which was the field it always should have guarded.
+> ADR-031 then removed the need for it altogether by putting every tenant route behind a literal
+> `org/` segment — a handle can no longer shadow a route, so there is nothing to reserve. The list
+> is deleted rather than relocated. Reintroduce it only if tenant handles ever return to the first
+> URL segment.
 
 **Decision** — `App\Rules\TeamName` rejects any name whose slug collides with an existing
 first-segment route prefix, plus a static list of reserved words (`admin`, `api`, `billing`,
@@ -1096,12 +1253,14 @@ Adding a new top-level route means checking that no existing team already holds 
 
 ## ADR-007 — Tenancy is scoped by team slug in the URL prefix
 
-**Reconstructed** · **Status**: Accepted, **amended by [ADR-027](#adr-027--the-tenant-url-identifier-is-a-random-immutable-public-id)**
+**Reconstructed** · **Status**: Accepted, **amended by [ADR-030](#adr-030--the-tenant-url-identifier-is-a-name-seeded-separately-editable-handle) and [ADR-031](#adr-031--tenant-routes-sit-behind-a-literal-org-segment)**
 
-> The prefix stays; what sits in it changes. The identifier is a random `public_id`, not a
-> name-derived slug, so the readability argument below no longer holds — that cost is stated and
-> accepted in ADR-027. The property this entry actually depends on, that one URL resolves to
-> exactly one tenant so a shared link never opens someone else's data, is untouched.
+> The prefix stays; two things about it changed. [ADR-030](#adr-030--the-tenant-url-identifier-is-a-name-seeded-separately-editable-handle)
+> restored a readable identifier — a `handle` seeded from the name, no longer regenerated on rename
+> — so this entry's readability argument holds again. [ADR-031](#adr-031--tenant-routes-sit-behind-a-literal-org-segment) then moved the tenant from
+> the **first** path segment to the segment after a literal `org/`, which is what let ADR-008 be
+> deleted outright. The property this entry actually depends on, that one URL resolves to exactly
+> one tenant so a shared link never opens someone else's data, was never in question.
 > The closing note about `/settings/teams/{team}` being an inconsistency to resolve is answered
 > by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed).
 
@@ -1129,13 +1288,14 @@ before the pattern is copied further.
 
 ## ADR-006 — Slug uniqueness includes soft-deleted teams
 
-**Reconstructed** · **Status**: Accepted, **generation superseded by [ADR-027](#adr-027--the-tenant-url-identifier-is-a-random-immutable-public-id)**
+**Reconstructed** · **Status**: Accepted, **extended by [ADR-030](#adr-030--the-tenant-url-identifier-is-a-name-seeded-separately-editable-handle)**
 
-> The core rule stands and is why ADR-027 keeps `withTrashed()` in the uniqueness check: a
-> retired identifier is never reissued, so a stale bookmark can never resolve to a different
-> tenant. What changes is what the identifier _is_ — a random `public_id` rather than a slug
-> derived from the name. The "occasional ugly `acme-2`" this entry accepted as the price no
-> longer occurs, and neither does the silent link breakage that renaming caused.
+> The core rule stands and now reaches further. Under ADR-030 the identifier is a `handle` seeded
+> from the name, and uniqueness is checked across three things rather than one: the live column,
+> soft-deleted rows, and `organization_handles` — every handle any tenant has ever held. That last
+> one stops a _changed_ handle from being claimed by someone else, which would have reintroduced
+> this entry's hazard through a door it never anticipated. The `acme-2` suffix accepted here as
+> the price is back, and is now fixable: the handle can be edited.
 
 **Decision** — `GeneratesUniqueTeamSlugs` checks `withTrashed()`. A deleted team's slug is
 retired permanently; a later team with the same name gets a numeric suffix.

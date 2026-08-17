@@ -1,42 +1,34 @@
-import { Form, Head, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { ChevronDown, Mail, UserPlus, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import CancelInvitationModal from '@/components/cancel-invitation-modal';
-import DeleteOrganizationModal from '@/components/delete-organization-modal';
-import InputError from '@/components/input-error';
 import InviteMemberModal from '@/components/invite-member-modal';
 import RemoveMemberModal from '@/components/remove-member-modal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import {
-    Frame,
-    FrameControl,
-    FrameDescription,
-    FrameFooter,
-    FrameGroup,
-    FrameHeader,
-    FrameLabel,
-    FramePanel,
-    FrameRow,
-    FrameTitle,
-} from '@/components/ui/frame';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import {
+    Frame,
+    FrameDescription,
+    FrameGroup,
+    FrameHeader,
+    FramePanel,
+    FrameTitle,
+} from '@/components/ui/frame';
 import { Tooltip, TooltipTrigger } from '@/components/ui/tooltip';
 import { useInitials } from '@/hooks/use-initials';
-import { edit, index, update } from '@/routes/organizations';
 import { update as updateMember } from '@/routes/organizations/members';
 import type {
-    RoleOption,
     Organization,
     OrganizationInvitation,
     OrganizationMember,
     OrganizationPermissions,
+    RoleOption,
 } from '@/types';
 
 type Props = {
@@ -47,7 +39,7 @@ type Props = {
     availableRoles: RoleOption[];
 };
 
-export default function OrganizationEdit({
+export default function OrganizationMembersSettings({
     organization,
     members,
     invitations,
@@ -57,7 +49,6 @@ export default function OrganizationEdit({
     const getInitials = useInitials();
 
     const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [removeMemberDialogOpen, setRemoveMemberDialogOpen] = useState(false);
     const [memberToRemove, setMemberToRemove] =
         useState<OrganizationMember | null>(null);
@@ -66,16 +57,8 @@ export default function OrganizationEdit({
     const [invitationToCancel, setInvitationToCancel] =
         useState<OrganizationInvitation | null>(null);
 
-    const pageTitle = useMemo(
-        () =>
-            permissions.canUpdateOrganization
-                ? `Edit ${organization.name}`
-                : `View ${organization.name}`,
-        [permissions.canUpdateOrganization, organization.name],
-    );
-
     const updateMemberRole = (member: OrganizationMember, newRole: string) => {
-        router.visit(updateMember([organization.publicId, member.id]), {
+        router.visit(updateMember([organization.handle, member.id]), {
             data: { role: newRole },
             preserveScroll: true,
         });
@@ -93,90 +76,9 @@ export default function OrganizationEdit({
 
     return (
         <>
-            <Head title={pageTitle} />
-
-            <h1 className="sr-only">{pageTitle}</h1>
+            <Head title={`${organization.name} members`} />
 
             <div className="flex flex-col gap-y-6">
-                {permissions.canUpdateOrganization ? (
-                    <Form
-                        {...update.form(organization.publicId)}
-                        setDefaultsOnSuccess
-                        className="w-full"
-                    >
-                        {({ errors, processing, isDirty, clearErrors }) => (
-                            <Frame>
-                                <FrameHeader>
-                                    <FrameTitle>General</FrameTitle>
-                                    <FrameDescription>
-                                        Settings for this organization.
-                                    </FrameDescription>
-                                </FrameHeader>
-
-                                <FramePanel padded={false}>
-                                    <FrameGroup>
-                                        <FrameRow>
-                                            <FrameLabel htmlFor="name">
-                                                Organization name
-                                                <FrameDescription>
-                                                    Appears in the switcher and
-                                                    in this organization's web
-                                                    address.
-                                                </FrameDescription>
-                                            </FrameLabel>
-                                            <FrameControl className="flex-col items-stretch gap-1">
-                                                <Input
-                                                    id="name"
-                                                    name="name"
-                                                    data-test="organization-name-input"
-                                                    defaultValue={
-                                                        organization.name
-                                                    }
-                                                    required
-                                                />
-                                                <InputError
-                                                    message={errors.name}
-                                                />
-                                            </FrameControl>
-                                        </FrameRow>
-                                    </FrameGroup>
-                                </FramePanel>
-
-                                {isDirty && (
-                                    <FrameFooter>
-                                        <Button
-                                            type="reset"
-                                            variant="ghost"
-                                            size="sm"
-                                            onPress={() => clearErrors()}
-                                        >
-                                            Cancel
-                                        </Button>
-                                        <Button
-                                            type="submit"
-                                            size="sm"
-                                            data-test="organization-save-button"
-                                            isDisabled={processing}
-                                        >
-                                            Save
-                                        </Button>
-                                    </FrameFooter>
-                                )}
-                            </Frame>
-                        )}
-                    </Form>
-                ) : (
-                    <Frame>
-                        <FrameHeader>
-                            <FrameTitle>{organization.name}</FrameTitle>
-                            <FrameDescription>
-                                You do not have permission to change this
-                                organization's settings.
-                            </FrameDescription>
-                        </FrameHeader>
-                    </Frame>
-                )}
-
                 <Frame>
                     <FrameHeader
                         action={
@@ -348,46 +250,6 @@ export default function OrganizationEdit({
                         </FramePanel>
                     </Frame>
                 ) : null}
-
-                {permissions.canDeleteOrganization &&
-                !organization.isPersonal ? (
-                    <Frame>
-                        <FrameHeader>
-                            <FrameTitle className="text-destructive">
-                                Danger
-                            </FrameTitle>
-                            <FrameDescription>
-                                Destructive settings that cannot be undone.
-                            </FrameDescription>
-                        </FrameHeader>
-
-                        <FramePanel padded={false}>
-                            <FrameRow>
-                                <FrameLabel>
-                                    Delete organization
-                                    <FrameDescription>
-                                        Deleting this organization permanently
-                                        removes it, along with its memberships
-                                        and pending invitations.
-                                    </FrameDescription>
-                                </FrameLabel>
-
-                                <FrameControl>
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        data-test="delete-organization-button"
-                                        onPress={() =>
-                                            setDeleteDialogOpen(true)
-                                        }
-                                    >
-                                        Delete organization
-                                    </Button>
-                                </FrameControl>
-                            </FrameRow>
-                        </FramePanel>
-                    </Frame>
-                ) : null}
             </div>
 
             {permissions.canCreateInvitation ? (
@@ -412,29 +274,6 @@ export default function OrganizationEdit({
                 open={cancelInvitationDialogOpen}
                 onOpenChange={setCancelInvitationDialogOpen}
             />
-
-            {permissions.canDeleteOrganization && !organization.isPersonal ? (
-                <DeleteOrganizationModal
-                    organization={organization}
-                    open={deleteDialogOpen}
-                    onOpenChange={setDeleteDialogOpen}
-                />
-            ) : null}
         </>
     );
 }
-
-OrganizationEdit.layout = (props: {
-    organization: { name: string; publicId: string };
-}) => ({
-    breadcrumbs: [
-        {
-            title: 'Organizations',
-            href: index(),
-        },
-        {
-            title: props.organization.name,
-            href: edit(props.organization.publicId),
-        },
-    ],
-});

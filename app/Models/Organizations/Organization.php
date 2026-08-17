@@ -2,7 +2,7 @@
 
 namespace App\Models\Organizations;
 
-use App\Concerns\Organizations\GeneratesPublicId;
+use App\Concerns\Organizations\GeneratesHandle;
 use App\Enums\Organizations\OrganizationRole;
 use App\Models\User;
 use Database\Factories\Organizations\OrganizationFactory;
@@ -18,7 +18,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property string $name
- * @property string $public_id
+ * @property string $handle
  * @property bool $is_personal
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -27,26 +27,34 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Membership> $memberships
  * @property-read Collection<int, User> $members
  */
-#[Fillable(['name', 'is_personal'])]
+#[Fillable(['name', 'handle', 'is_personal'])]
 class Organization extends Model
 {
     /** @use HasFactory<OrganizationFactory> */
-    use GeneratesPublicId, HasFactory, SoftDeletes;
+    use GeneratesHandle, HasFactory, SoftDeletes;
 
     /**
      * Bootstrap the model and its traits.
      *
-     * The public identifier is assigned once, on create, and deliberately has no `updating`
-     * counterpart: renaming an organization must never change its URL (ADR-027).
+     * The handle is seeded from the name once, on create, and deliberately has no `updating`
+     * counterpart keyed on the name: renaming must never change the URL (ADR-030). Changing the
+     * handle itself is an explicit, separately validated action.
+     *
+     * Every handle is recorded on save so it stays retired for good, even after this
+     * organization moves off it.
      */
     protected static function boot(): void
     {
         parent::boot();
 
         static::creating(function (Organization $organization) {
-            if (empty($organization->public_id)) {
-                $organization->public_id = static::generatePublicId();
+            if (empty($organization->handle)) {
+                $organization->handle = static::generateHandle($organization->name);
             }
+        });
+
+        static::saved(function (Organization $organization) {
+            $organization->rememberHandle();
         });
     }
 
@@ -110,6 +118,6 @@ class Organization extends Model
      */
     public function getRouteKeyName(): string
     {
-        return 'public_id';
+        return 'handle';
     }
 }

@@ -14,10 +14,26 @@ return new class extends Migration
         Schema::create('organizations', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('public_id')->unique();
+            $table->string('handle')->unique();
             $table->boolean('is_personal')->default(false);
             $table->timestamps();
             $table->softDeletes();
+        });
+
+        /*
+         * Every handle an organization has ever held, including the current one.
+         *
+         * Changing a handle would otherwise release the old one for another organization to
+         * claim, and every stale bookmark pointing at it would then resolve to a different
+         * tenant — the cross-tenant hazard ADR-006 exists to prevent, reintroduced through a
+         * different door. Rows are never deleted; uniqueness is checked against this table as
+         * well as against `organizations.handle`.
+         */
+        Schema::create('organization_handles', function (Blueprint $table) {
+            $table->id();
+            $table->string('handle')->unique();
+            $table->foreignId('organization_id')->constrained()->cascadeOnDelete();
+            $table->timestamps();
         });
 
         Schema::create('organization_members', function (Blueprint $table) {
@@ -50,6 +66,7 @@ return new class extends Migration
     {
         Schema::dropIfExists('organization_invitations');
         Schema::dropIfExists('organization_members');
+        Schema::dropIfExists('organization_handles');
         Schema::dropIfExists('organizations');
     }
 };

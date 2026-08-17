@@ -5,7 +5,7 @@ import { register } from '@/routes';
 export default function Welcome() {
     const { auth, currentOrganization } = usePage().props;
     const dashboardUrl = currentOrganization
-        ? dashboard(currentOrganization.publicId)
+        ? dashboard(currentOrganization.handle)
         : '/';
 
     return (

@@ -38,7 +38,9 @@ class CreateNewUser implements CreatesNewUsers
                 'password' => $input['password'],
             ]);
 
-            $this->createOrganization->handle($user, $user->name."'s Organization", isPersonal: true);
+            // Named after the user, with no suffix: not everyone signing up is a company, and the
+            // organization is renameable from settings like any other (ADR-025).
+            $this->createOrganization->handle($user, $user->name, isPersonal: true);
 
             return $user;
         });

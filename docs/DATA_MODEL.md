@@ -5,8 +5,8 @@ _Last verified against the migrations and models: 2026-08-15._
 > **Renamed on 2026-08-17 — the names below are stale.** The tables are now `organizations`,
 > `organization_members` and `organization_invitations`; the foreign key is `organization_id`;
 > the user column is `users.current_organization_id`; and `teams.slug` is now
-> `organizations.public_id`, a random twelve-character immutable identifier
-> ([ADR-025](DECISIONS.md), [ADR-027](DECISIONS.md)). `Membership` keeps its name. Classes moved
+> `organizations.handle`, seeded from the name and separately editable
+> ([ADR-025](DECISIONS.md), [ADR-030](DECISIONS.md)). `Membership` keeps its name. Classes moved
 > into domain subfolders per [ADR-026](DECISIONS.md) — `App\Models\Organizations\Organization`
 > and so on. **The prose and diagrams below have not been rewritten yet; read every "team" as
 > "organization".**
@@ -96,21 +96,22 @@ acceptable at the frequency team switching actually happens.
 many customers exist and invite enumeration. The slug also makes the URL readable, which
 matters when agency staff share links internally.
 
-**Replaced by [ADR-027](DECISIONS.md), implemented 2026-08-17.** `slug` is now `public_id`: a
-random twelve-character token from the alphabet `23456789abcdefghjkmnpqrstuvwxyz` (no `0`/`o`,
-no `1`/`l`/`i`), generated once in `creating` and **immutable** — there is no `updating` hook and
-no route to change it.
+**Replaced by [ADR-030](DECISIONS.md), implemented 2026-08-17.** `slug` is now `handle`. It is
+seeded from the name once at creation (`Str::slug`, numeric suffix on collision), never touched by
+a rename, and editable through its own field on the settings screen.
 
-The non-sequential argument above is kept and strengthened: a name-derived slug still leaked
-_which_ customers exist, even if not how many, so `/some-agency/` could be probed. The
-readability argument is dropped, and that is a genuine loss, accepted deliberately — what the URL
-must guarantee is that it resolves to exactly one tenant, and that survives.
+The readability argument above therefore still stands. ADR-027 briefly replaced the slug with a
+random token on the grounds that a readable identifier let an attacker probe `/some-agency/` for
+customers — that argument was wrong, because `EnsureOrganizationMembership` returns one
+indistinguishable 403 whether or not the organization exists.
 
-It also removed a bug the table above did not mention: `Organization::booted()` regenerated the
-slug on **rename**, silently breaking every existing link.
+What that change did fix, and what ADR-030 keeps, is the coupling: `Organization::booted()`
+regenerated the slug on **rename**, silently breaking every existing link.
 
-The generator lives in `App\Concerns\Organizations\GeneratesPublicId` and is written for reuse by
-`Site`, `Server` and `Client`.
+A third table, `organization_handles`, records every handle a tenant has ever held. Uniqueness is
+checked against it as well as against the live column and soft-deleted rows, so changing a handle
+does not release the old one for another tenant to claim. The generator lives in
+`App\Concerns\Organizations\GeneratesHandle`.
 
 **Why slug uniqueness includes soft-deleted teams.** `GeneratesUniqueTeamSlugs` queries
 `withTrashed()`. If a deleted team's slug were reissued, links and bookmarks pointing at
@@ -250,8 +251,8 @@ When Servers and Sites are added:
 2. Access is scoped at query time via the team relationship, never by loading and then
    filtering in PHP.
 3. Route keys for tenant resources should be non-sequential for the same enumeration
-   reasons the team slug is. [ADR-027](DECISIONS.md) settles this with one shared
-   implementation: the `GeneratesPublicId` trait built for `Organization` is reused by `Site`,
+   reasons the team slug is. [ADR-030](DECISIONS.md) settles this with one shared
+   implementation: the `GeneratesHandle` trait built for `Organization` is reused by `Site`,
    `Server` and `Client`, rather than each table re-deciding.
 4. Anything holding a credential to reach a customer server is encrypted at rest, and is
    never exposed through an Inertia prop.

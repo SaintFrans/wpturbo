@@ -1,6 +1,6 @@
 # `Team` → `Organization` — execution plan
 
-_Written 2026-08-17. **Phases 1 and 5 executed 2026-08-17.** Phases 2, 3, 4 and 6 remain._
+_Written 2026-08-17. **Phases 1, 4 and 5 executed 2026-08-17.** Phases 2, 3 and 6 remain._
 
 The reasoning is in [ADR-025](DECISIONS.md) through [ADR-029](DECISIONS.md). This document is
 the _what to change_, in an order that can be verified at each step.
@@ -10,13 +10,12 @@ work.
 
 > **Executed so far.** `Team` is `Organization` everywhere — model, tables, enums, DTOs,
 > middleware, routes, URL segment, frontend types — laid out per [ADR-026](DECISIONS.md), and
-> the URL identifier is a random immutable `public_id` per [ADR-027](DECISIONS.md). Suite: 98
-> passing, `composer ci:check` green.
+> the URL identifier is a `handle` per [ADR-030](DECISIONS.md), and every tenant route sits
+> behind `org/` per [ADR-031](DECISIONS.md). Suite: 103 passing, `composer ci:check` green.
 >
-> **Still true of the code, and deliberately so:** `is_personal` still exists (phase 2),
-> visiting a prefixed URL still switches the current organization (phase 3), organization
-> administration still lives under `/settings/organizations/…` (phase 4), and Admins still
-> cannot manage members (phase 6).
+> **Still true of the code, and deliberately so:** `is_personal` still exists (phase 2), visiting
+> a prefixed URL still switches the current organization (phase 3), and Admins still cannot manage
+> members (phase 6).
 
 ---
 
@@ -31,8 +30,8 @@ nothing changed, which you lose the moment behaviour changes in the same commit.
 | 1     | Pure rename, plus the folder move                      | 025/026 | **Done** 2026-08-17               |
 | 2     | Remove `is_personal`, add the auto-create fallback     | 025     | Open                              |
 | 3     | Remove the implicit organization switch                | 025     | Open                              |
-| 4     | Move organization administration inside the URL prefix | 025     | Open                              |
-| 5     | `slug` → random immutable `public_id`                  | 027     | **Done** 2026-08-17, with phase 1 |
+| 4     | Move organization administration inside the URL prefix | 025/031 | **Done** 2026-08-17               |
+| 5     | `slug` → name-seeded, editable `handle`                | 030     | **Done** 2026-08-17, with phase 1 |
 | 6     | Admins manage members below their own role             | 028     | Open                              |
 
 Every phase after 1 is separable. If you want the rename landed and nothing else, phase 1 alone
@@ -78,15 +77,15 @@ Phase 6 is independent of the rename entirely and could be done first, against t
 
 ### Database
 
-| Now                     | Becomes                             |
-| ----------------------- | ----------------------------------- |
-| `teams`                 | `organizations`                     |
-| `team_members`          | `organization_members`              |
-| `team_invitations`      | `organization_invitations`          |
-| `*.team_id`             | `*.organization_id`                 |
-| `users.current_team_id` | `users.current_organization_id`     |
-| `teams.is_personal`     | **dropped** (phase 2)               |
-| `teams.slug`            | `organizations.public_id` (phase 5) |
+| Now                     | Becomes                          |
+| ----------------------- | -------------------------------- |
+| `teams`                 | `organizations`                  |
+| `team_members`          | `organization_members`           |
+| `team_invitations`      | `organization_invitations`       |
+| `*.team_id`             | `*.organization_id`              |
+| `users.current_team_id` | `users.current_organization_id`  |
+| `teams.is_personal`     | **dropped** (phase 2)            |
+| `teams.slug`            | `organizations.handle` (phase 5) |
 
 ### Routes and permissions
 
@@ -208,7 +207,7 @@ commit message — it is the one step that is not automatic for other machines.
 ### 3.4 Reserved names
 
 `OrganizationName` keeps ADR-008's reserved-word list unchanged in phase 1. **Phase 5 removes it
-entirely** ([ADR-027](DECISIONS.md)) — do not spend effort extending it in the meantime.
+onto the **handle**** ([ADR-030](DECISIONS.md)) — the list survives, the field it guards changes.
 
 ### 3.4b What this plan got wrong — corrections from executing it
 
@@ -234,7 +233,7 @@ Recorded because phases 2, 3, 4 and 6 will hit the same edges.
    `pages/organizations/`, so any test rendering one gets a 500 from
    `ViteException: Unable to locate file in Vite manifest` until `vp build` runs.
 6. **Watch payload key casing.** `DashboardController` builds its invitation payload by hand; the
-   sweep turned `'slug'` into `'public_id'` while the frontend type expects `publicId`. The DTOs
+   sweep turned `'slug'` into `'handle'` while the frontend type expected camelCase. The DTOs
    are camelCase and the hand-built arrays must match them.
 
 ### 3.5 Verification
@@ -369,86 +368,65 @@ scenario ADR-025 is built around.
 
 ## 6. Phase 4 — organization administration moves inside the prefix
 
-Per ADR-025's simplification of ADR-022.
+Per ADR-025's simplification of ADR-022, extended by [ADR-031](DECISIONS.md). **Done 2026-08-17.**
 
-| Now                                       | Becomes                                                            |
-| ----------------------------------------- | ------------------------------------------------------------------ |
-| `GET /settings/teams`                     | `GET /organizations` — list and create, no tenant                  |
-| `POST /settings/teams`                    | `POST /organizations`                                              |
-| `GET /settings/teams/{team}`              | `GET /{current_organization}/settings`                             |
-| `PATCH /settings/teams/{team}`            | `PATCH /{current_organization}/settings`                           |
-| `DELETE /settings/teams/{team}`           | `DELETE /{current_organization}/settings`                          |
-| `POST /settings/teams/{team}/invitations` | `POST /{current_organization}/settings/invitations`                |
-| `DELETE /…/invitations/{invitation}`      | `DELETE /{current_organization}/settings/invitations/{invitation}` |
-| `PATCH /…/members/{user}`                 | `PATCH /{current_organization}/settings/members/{user}`            |
-| `DELETE /…/members/{user}`                | `DELETE /{current_organization}/settings/members/{user}`           |
-| `DELETE /settings/teams/{team}/leave`     | `DELETE /{current_organization}/settings/leave`                    |
-| `POST /settings/teams/{team}/switch`      | `POST /organizations/{organization}/switch`                        |
+### 6.1 The route table as built
 
-Notes:
+| Route                                                          | Name                                      |
+| -------------------------------------------------------------- | ----------------------------------------- |
+| `GET/POST /org`                                                | `organizations.index` / `.store`          |
+| `GET /org/{organization}/dashboard`                            | `dashboard`                               |
+| `POST /org/{organization}/switch`                              | `organizations.switch`                    |
+| `GET/PATCH/DELETE /org/{organization}/settings`                | `organizations.edit`/`.update`/`.destroy` |
+| `DELETE /org/{organization}/settings/leave`                    | `organizations.leave`                     |
+| `PATCH/DELETE /org/{organization}/settings/members/{user}`     | `organizations.members.*`                 |
+| `POST /org/{organization}/settings/invitations`                | `organizations.invitations.store`         |
+| `DELETE /org/{organization}/settings/invitations/{invitation}` | `organizations.invitations.destroy`       |
 
-- `switch` stays outside the prefix deliberately: it is the one action taken _from_ one
-  organization _about_ another, so the target cannot be the prefix.
-- `/settings/…` afterwards holds only `profile`, `security` and appearance — genuinely
-  personal. That is the whole point of the simplification.
-- Both route groups keep `EnsureOrganizationMembership`. Moving routes must not drop it;
-  SECURITY.md §2 assumption 1 depends on it.
-- Add `organizations` to `OrganizationName`'s reserved-word list — **unless phase 5 is already
-  done**, in which case the list no longer exists and nothing is needed.
-- `invitations.accept` / `invitations.decline` stay where they are — they are reached by a
-  recipient who is not yet a member and therefore cannot carry an organization prefix.
-- Regenerate Wayfinder afterwards; route-name changes surface as TypeScript errors, which is
-  the intended safety net (ADR-001).
+`/settings/…` now holds only `profile`, `security` and `appearance`. `invitations.accept` and
+`invitations.decline` stay top-level: the recipient is not a member yet and cannot carry a prefix.
 
----
+### 6.2 What the plan did not anticipate
 
-## 7. Phase 5 — `slug` becomes a random immutable `public_id`
+- **`{current_organization}` was removed entirely.** The two parameter names only existed because
+  administration lived outside the prefix. One name, one URL default. Three places set that
+  default and all three had to change — `SetOrganizationUrlDefaults`,
+  `RedirectsToCurrentOrganization` **and** `HasOrganizations::switchOrganization()`. The last one
+  is easy to miss and produces `Missing required parameter for [Route: dashboard]` in six
+  unrelated tests.
+- **The reserved-word list was deleted rather than extended.** The plan said to add
+  `organizations` to it; ADR-031 removed the need for a list at all.
+- **The Organizations entry left the settings navigation** for the avatar menu — `/settings/…` is
+  personal now, so listing organizations there no longer made sense.
+- **A behaviour change came free with the prefix:** organization settings pages now switch your
+  current organization, because every tenant route is prefixed. Phase 3 removes that.
+- Tests asserting literal redirect URLs (`EmailVerificationTest`) needed the `/org` prefix; tests
+  using `route()` by name did not.
 
-Per [ADR-027](DECISIONS.md).
+## 7. Phase 5 — `slug` becomes a name-seeded, editable `handle`
 
-### 7.1 The change
+Per [ADR-030](DECISIONS.md). **Done 2026-08-17.** ADR-027's random `public_id` shipped first and
+was reversed the same day; what landed is described here.
 
-- Column `organizations.slug` → `organizations.public_id`. Unique, indexed, generated on create,
-  **never updated afterwards**.
-- Format: **twelve lowercase alphanumeric characters**, from an alphabet excluding `0`, `o`, `1`,
-  `l` and `i`, so the value survives being read aloud or copied by hand into a support ticket.
-- `Organization::getRouteKeyName()` returns `public_id`.
-- `Organization::booted()` — the `updating` hook that regenerates the slug on rename is
-  **deleted**. This is the bug the ADR exists to fix; make sure it is gone, not merely bypassed.
-- `GeneratesUniqueOrganizationSlugs` → `GeneratesPublicId`. The `Str::slug` call, the
-  `like 'name-%'` query, the suffix-parsing `preg_match` and the numeric-increment logic all go.
-  What replaces them: generate, check uniqueness **including `withTrashed()`**, retry on
-  collision. ADR-006's rule is preserved exactly here — a retired identifier is never reissued.
-- `OrganizationName` loses the reserved-word list and the route-prefix check (ADR-008 is retired).
-  Keep ordinary validation: required, length, character set.
+### 7.1 What changed
 
-### 7.2 Reuse
+- Column `organizations.slug` → `organizations.handle`, seeded via `Str::slug($name)` at creation
+  with a numeric suffix on collision.
+- New table `organization_handles` — every handle a tenant has ever held. Written on every save.
+- `Organization::booted()`'s `updating` hook is **deleted**: renaming never touches the handle.
+- `GeneratesUniqueOrganizationSlugs` → `App\Concerns\Organizations\GeneratesHandle`, which
+  exposes `handleIsUnavailable()` publicly so the generator and the validation rule ask one
+  question with one answer.
+- `App\Rules\Organizations\OrganizationHandle` holds the reserved-word list restored from
+  `1260c98`, now applied to the handle rather than the name.
+- `handle` is fillable, sent by the settings form, and validated ignoring the organization's own
+  current value.
 
-Write `GeneratesPublicId` as a trait usable by any model, and use it for `Site`, `Server` and
-`Client` route keys when they arrive. This settles DATA_MODEL.md's "route keys for tenant
-resources should be non-sequential" constraint with one implementation instead of a rule each new
-table has to remember.
+### 7.2 Tests
 
-### 7.3 Tests
-
-The existing slug tests assert name-derivation, rename-regeneration and `-2` suffixing. All three
-behaviours are being removed, so **those tests are deleted, not adapted** — keeping them would
-assert the bug. Replace with:
-
-- A created organization gets a twelve-character `public_id` matching the allowed alphabet.
-- Renaming an organization does **not** change its `public_id`. (This is the regression test for
-  the whole ADR.)
-- Two organizations may hold the same name, and get different identifiers.
-- A soft-deleted organization's `public_id` is not reissued.
-- An organization may be named `Settings` — free text, no reserved-word rejection.
-
-### 7.4 Frontend
-
-`UserOrganization.slug` → `publicId`, in the PHP DTO and `organizations.ts` together. Check
-`organization-switcher.tsx` and the two `pages/organizations/` pages for anywhere the slug is
-displayed as if it were meaningful — under ADR-027 it is not, and showing it in the UI as an
-identifier the user recognises would be misleading. It belongs in the URL and, if anywhere,
-in a support/debug context.
+Eight, replacing the four that asserted the old slug behaviour. The two that matter most:
+renaming leaves the handle untouched, and a handle released by an edit cannot be claimed by
+another organization.
 
 ---
 
@@ -499,17 +477,17 @@ worse than having no note at all.
 
 Per `CLAUDE.md`, stated even where the conclusion is "no new risk".
 
-| Concern                                   | Assessment                                                                                                                                                                                                                                      |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A missed rename leaves a route unguarded  | The main risk. Middleware alias, route group and middleware class must move in one commit. Mitigated by the existing non-member 403 tests — keep them, do not skip.                                                                             |
-| `is_personal` removal widens permissions  | Real, and specific: the clause in `OrganizationPolicy::leave` and `::delete` guards two things. §4.2 replaces rather than deletes it.                                                                                                           |
-| Auto-create runs on someone else's action | `EnsureUserHasOrganization` fires when an owner removes a member. It creates an organization owned by the _removed_ user, never grants access to anything existing.                                                                             |
-| Per-request scoping (phase 3)             | Narrows an implicit write; it does not widen read access. Membership is still checked on every request by the same middleware.                                                                                                                  |
-| Route move (phase 4)                      | Both groups keep `EnsureOrganizationMembership`. Verify with `php artisan route:list` that no organization route sits outside the group.                                                                                                        |
-| Random `public_id` (phase 5)              | Net improvement. The customer's name leaves the URL, so `/some-agency/` can no longer be probed to learn whether an agency is a customer. ADR-006's never-reissue rule must survive the rewrite — keep `withTrashed()` in the uniqueness check. |
-| Dropping the reserved-word list (phase 5) | Safe **only** because the identifier is no longer name-derived. If name-derived identifiers ever return, ADR-008 must return with them. Verify by naming an organization `Settings` and confirming routes still resolve.                        |
-| Admin member management (phase 6)         | A deliberate widening, bounded by the rank rule. The escalation path is the _invited role_, not the action — see §8.2. Every test in §8.3 is a negative test; they are the control.                                                             |
-| Tenant isolation model                    | Unchanged. ADR-007 and ADR-009 are renamed, not reconsidered; ADR-006's rule survives phase 5 in a new form.                                                                                                                                    |
+| Concern                                   | Assessment                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A missed rename leaves a route unguarded  | The main risk. Middleware alias, route group and middleware class must move in one commit. Mitigated by the existing non-member 403 tests — keep them, do not skip.                                                                                                                                                                                                                                             |
+| `is_personal` removal widens permissions  | Real, and specific: the clause in `OrganizationPolicy::leave` and `::delete` guards two things. §4.2 replaces rather than deletes it.                                                                                                                                                                                                                                                                           |
+| Auto-create runs on someone else's action | `EnsureUserHasOrganization` fires when an owner removes a member. It creates an organization owned by the _removed_ user, never grants access to anything existing.                                                                                                                                                                                                                                             |
+| Per-request scoping (phase 3)             | Narrows an implicit write; it does not widen read access. Membership is still checked on every request by the same middleware.                                                                                                                                                                                                                                                                                  |
+| Route move (phase 4)                      | Both groups keep `EnsureOrganizationMembership`. Verify with `php artisan route:list` that no organization route sits outside the group.                                                                                                                                                                                                                                                                        |
+| Name-seeded `handle` (phase 5)            | **The security claim originally made here was wrong.** It said a readable identifier lets `/some-agency/` be probed to discover customers; `EnsureOrganizationMembership` returns one indistinguishable 403 for "no such organization" and "not a member", so there is no such channel. What matters instead: a handle is never reissued, across the live column, soft-deleted rows and `organization_handles`. |
+| Dropping the reserved-word list (phase 5) | Safe **only** because the identifier is no longer name-derived. If name-derived identifiers ever return, ADR-008 must return with them. Verify by naming an organization `Settings` and confirming routes still resolve.                                                                                                                                                                                        |
+| Admin member management (phase 6)         | A deliberate widening, bounded by the rank rule. The escalation path is the _invited role_, not the action — see §8.2. Every test in §8.3 is a negative test; they are the control.                                                                                                                                                                                                                             |
+| Tenant isolation model                    | Unchanged. ADR-007 and ADR-009 are renamed, not reconsidered; ADR-006's rule survives phase 5 in a new form.                                                                                                                                                                                                                                                                                                    |
 
 **Test the negative case** (SECURITY.md §5.10): the tests proving a non-member gets a 403 are
 the ones that matter here. If any of them needs its logic rewritten during phase 1, treat that
@@ -524,7 +502,7 @@ Per ADR-011, in the same commit as the code — not afterwards.
 | File                                   | What changes                                                                                                                                                                             |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `docs/ARCHITECTURE.md`                 | §2 code organisation (ADR-026 tree), §3 tenancy model **and the whole "name collisions with route prefixes" subsection, which phase 5 makes obsolete**, §4 registration, §8 constraint 2 |
-| `docs/DATA_MODEL.md`                   | Entity map, all three tables, `is_personal` removal, `slug` → `public_id` and its rationale, the permission table (ADR-028), DTO names                                                   |
+| `docs/DATA_MODEL.md`                   | Entity map, all three tables, `is_personal` removal, `slug` → `handle` and its rationale, the new `organization_handles` table, the permission table (ADR-028), DTO names                |
 | `docs/SECURITY.md`                     | §2 assumption 1, §3 tenant isolation, **§3 privilege boundaries — currently states the opposite of ADR-028**, §5 rules 2 and 3, and the ADR-029 recovery procedure                       |
 | `docs/OPEN_QUESTIONS.md`               | Q11, Q12 and Q13 already added; check nothing new is opened                                                                                                                              |
 | `README.md`                            | Status section wording                                                                                                                                                                   |
@@ -557,14 +535,9 @@ or the line becomes a claim the file no longer earns.
 - [ ] `SetOrganizationUrlDefaults` verified against the URL's organization
 - [ ] Cross-organization visit test added
 
-**Phase 4 — routes**
+**Phase 4 — routes** ✅ done 2026-08-17, with the `org/` prefix from ADR-031
 
-- [ ] Route table in §6 applied
-- [ ] `organizations` added to the reserved-word list, unless phase 5 already removed it
-- [ ] `php artisan route:list` shows no organization route outside the middleware group
-- [ ] Wayfinder regenerated; `tsc` clean
-
-**Phase 5 — `public_id`** ✅ done 2026-08-17, executed together with phase 1
+**Phase 5 — `handle`** ✅ done 2026-08-17, executed with phase 1; revised same day per ADR-030
 
 **Phase 6 — Admin member management**
 

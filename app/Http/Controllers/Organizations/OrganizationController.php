@@ -3,11 +3,9 @@
 namespace App\Http\Controllers\Organizations;
 
 use App\Actions\Organizations\CreateOrganization;
-use App\Enums\Organizations\OrganizationRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Organizations\DeleteOrganizationRequest;
 use App\Http\Requests\Organizations\SaveOrganizationRequest;
-use App\Models\Organizations\Membership;
 use App\Models\Organizations\Organization;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -20,15 +18,20 @@ use Inertia\Response;
 class OrganizationController extends Controller
 {
     /**
-     * Display a listing of the user's organizations.
+     * Send the user to their own organization.
+     *
+     * There is no organizations index: creating one happens in the header switcher, deleting one
+     * on its General settings tab, so a list page had nothing left to do. The route survives as a
+     * stable "take me to my organization" entry point.
      */
-    public function index(Request $request): Response
+    public function index(Request $request): RedirectResponse
     {
         $user = $request->user();
+        $organization = $user->currentOrganization ?? $user->fallbackOrganization();
 
-        return Inertia::render('organizations/index', [
-            'organizations' => $user->toUserOrganizations(includeCurrent: true),
-        ]);
+        abort_if(! $organization, 404);
+
+        return to_route('organizations.edit', ['organization' => $organization->handle]);
     }
 
     /**
@@ -40,48 +43,22 @@ class OrganizationController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Organization created.')]);
 
-        return to_route('organizations.edit', ['organization' => $organization->public_id]);
+        return to_route('organizations.edit', ['organization' => $organization->handle]);
     }
 
     /**
-     * Show the organization edit page.
+     * Show the organization's general settings.
      */
     public function edit(Request $request, Organization $organization): Response
     {
-        $user = $request->user();
-
-        return Inertia::render('organizations/edit', [
+        return Inertia::render('organizations/settings/general', [
             'organization' => [
                 'id' => $organization->id,
                 'name' => $organization->name,
-                'public_id' => $organization->public_id,
+                'handle' => $organization->handle,
                 'isPersonal' => $organization->is_personal,
             ],
-            'members' => $organization->members()->get()->map(function (User $member) {
-                /** @var Membership $membership */
-                $membership = $member->getRelation('pivot');
-
-                return [
-                    'id' => $member->id,
-                    'name' => $member->name,
-                    'email' => $member->email,
-                    'avatar' => $member->avatar ?? null,
-                    'role' => $membership->role->value,
-                    'role_label' => $membership->role->label(),
-                ];
-            }),
-            'invitations' => $organization->invitations()
-                ->whereNull('accepted_at')
-                ->get()
-                ->map(fn ($invitation) => [
-                    'code' => $invitation->code,
-                    'email' => $invitation->email,
-                    'role' => $invitation->role->value,
-                    'role_label' => $invitation->role->label(),
-                    'created_at' => $invitation->created_at->toISOString(),
-                ]),
-            'permissions' => $user->toOrganizationPermissions($organization),
-            'availableRoles' => OrganizationRole::assignable(),
+            'permissions' => $request->user()->toOrganizationPermissions($organization),
         ]);
     }
 
@@ -95,14 +72,17 @@ class OrganizationController extends Controller
         $organization = DB::transaction(function () use ($request, $organization) {
             $organization = Organization::whereKey($organization->id)->lockForUpdate()->firstOrFail();
 
-            $organization->update(['name' => $request->validated('name')]);
+            $organization->update(array_filter([
+                'name' => $request->validated('name'),
+                'handle' => $request->validated('handle'),
+            ], fn ($value) => $value !== null));
 
             return $organization;
         });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Organization updated.')]);
 
-        return to_route('organizations.edit', ['organization' => $organization->public_id]);
+        return to_route('organizations.edit', ['organization' => $organization->handle]);
     }
 
     /**

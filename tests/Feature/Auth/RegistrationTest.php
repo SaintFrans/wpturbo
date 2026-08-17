@@ -46,3 +46,19 @@ test('new users can register', function () {
     $user = User::where('email', 'test@example.com')->first();
     $response->assertRedirect(route('dashboard'));
 });
+
+test('the organization created at registration is named after the user', function () {
+    $this->post(route('register.store'), [
+        'name' => 'Frans Bijleveld',
+        'email' => 'frans@example.com',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+    ]);
+
+    $organization = User::where('email', 'frans@example.com')->sole()->personalOrganization();
+
+    // No "'s Organization" suffix: not everyone signing up is a company (ADR-025).
+    expect($organization)
+        ->name->toBe('Frans Bijleveld')
+        ->handle->toBe('frans-bijleveld');
+});

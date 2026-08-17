@@ -20,6 +20,7 @@ import { UserMenuContent } from '@/components/user-menu-content';
 import { useInitials } from '@/hooks/use-initials';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
+import { edit as organizationSettings } from '@/routes/organizations';
 import type { NavItem } from '@/types';
 
 const supportNavItems: NavItem[] = [
@@ -40,16 +41,25 @@ export function AppHeader() {
     const { auth, currentOrganization } = page.props;
     const getInitials = useInitials();
     const dashboardUrl = currentOrganization
-        ? dashboard(currentOrganization.publicId)
+        ? dashboard(currentOrganization.handle)
         : '/';
 
     // Tenant-scoped areas. Servers, Applications and DNS join this row as they are built
     // (ADR-016); sections *within* a resource belong in a SectionNav, not here.
     //
-    // Account settings and organization administration are deliberately absent: both hang off the
-    // avatar menu, keeping this row for the product itself.
+    // Account settings are deliberately absent — those belong to the person, not the tenant, and
+    // hang off the avatar menu. Organization settings are tenant-scoped, so they are an area.
     const areaNavItems: NavItem[] = [
         { title: 'Overview', href: dashboardUrl, icon: null },
+        ...(currentOrganization
+            ? [
+                  {
+                      title: 'Settings',
+                      href: organizationSettings(currentOrganization.handle),
+                      icon: null,
+                  },
+              ]
+            : []),
     ];
 
     return (

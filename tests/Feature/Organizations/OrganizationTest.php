@@ -5,14 +5,15 @@ use App\Models\Organizations\Organization;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('the organizations index page can be rendered', function () {
+test('the organizations index redirects to the user\'s own organization', function () {
     $user = User::factory()->create();
 
-    $response = $this
+    // There is no list page: creating happens in the header switcher, deleting on the General
+    // tab, so /org is only an entry point into the organization you are already in.
+    $this
         ->actingAs($user)
-        ->get(route('organizations.index'));
-
-    $response->assertOk();
+        ->get(route('organizations.index'))
+        ->assertRedirect(route('organizations.edit', $user->personalOrganization()));
 });
 
 test('organizations can be created', function () {
@@ -32,21 +33,19 @@ test('organizations can be created', function () {
     ]);
 });
 
-test('a new organization gets a random public id', function () {
-    $organization = Organization::factory()->create(['name' => 'Acme']);
+test('a new organization gets a handle derived from its name', function () {
+    $organization = Organization::factory()->create(['name' => 'OUI DO Digital']);
 
-    expect($organization->public_id)->toMatch('/^[23456789abcdefghjkmnpqrstuvwxyz]{12}$/');
+    expect($organization->handle)->toBe('oui-do-digital');
 });
 
-test('renaming an organization does not change its public id', function () {
+test('renaming an organization does not change its handle', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create(['name' => 'Acme']);
     $organization->memberships()->create([
         'user_id' => $user->id,
         'role' => OrganizationRole::Owner,
     ]);
-
-    $publicId = $organization->public_id;
 
     $this
         ->actingAs($user)
@@ -55,31 +54,119 @@ test('renaming an organization does not change its public id', function () {
 
     expect($organization->fresh())
         ->name->toBe('Acme Group')
-        ->public_id->toBe($publicId);
+        ->handle->toBe('acme');
 });
 
-test('two organizations may share a name and still get distinct public ids', function () {
-    $first = Organization::factory()->create(['name' => 'Acme']);
+test('a colliding name gets a suffixed handle', function () {
+    Organization::factory()->create(['name' => 'Acme']);
     $second = Organization::factory()->create(['name' => 'Acme']);
 
-    expect($second->public_id)->not->toBe($first->public_id);
+    expect($second->handle)->toBe('acme-2');
 });
 
-test('a soft deleted organization does not release its public id', function () {
-    $organization = Organization::factory()->create();
-    $publicId = $organization->public_id;
+test('the handle can be changed independently of the name', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create(['name' => 'Acme']);
+    $organization->memberships()->create([
+        'user_id' => $user->id,
+        'role' => OrganizationRole::Owner,
+    ]);
+
+    $this
+        ->actingAs($user)
+        ->patch(route('organizations.update', $organization), [
+            'name' => 'Acme',
+            'handle' => 'acme-group',
+        ])
+        ->assertRedirect();
+
+    expect($organization->fresh())
+        ->name->toBe('Acme')
+        ->handle->toBe('acme-group');
+});
+
+test('a released handle is never reissued to another organization', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create(['name' => 'Acme']);
+    $organization->memberships()->create([
+        'user_id' => $user->id,
+        'role' => OrganizationRole::Owner,
+    ]);
+
+    $this->actingAs($user)->patch(route('organizations.update', $organization), [
+        'name' => 'Acme',
+        'handle' => 'acme-group',
+    ]);
+
+    // 'acme' is free in the organizations table now, but every bookmark pointing at it must not
+    // start resolving to somebody else.
+    $other = User::factory()->create();
+    $otherOrganization = Organization::factory()->create();
+    $otherOrganization->memberships()->create([
+        'user_id' => $other->id,
+        'role' => OrganizationRole::Owner,
+    ]);
+
+    $this
+        ->actingAs($other)
+        ->patch(route('organizations.update', $otherOrganization), [
+            'name' => $otherOrganization->name,
+            'handle' => 'acme',
+        ])
+        ->assertSessionHasErrors('handle');
+});
+
+test('a soft deleted organization does not release its handle', function () {
+    $organization = Organization::factory()->create(['name' => 'Acme']);
     $organization->delete();
 
-    expect(Organization::withTrashed()->where('public_id', $publicId)->count())->toBe(1);
+    $replacement = Organization::factory()->create(['name' => 'Acme']);
 
-    $replacement = Organization::factory()->create();
+    expect($replacement->handle)->toBe('acme-2');
+});
 
-    expect($replacement->public_id)->not->toBe($publicId);
+test('a handle matching an application route is allowed', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+    $organization->memberships()->create([
+        'user_id' => $user->id,
+        'role' => OrganizationRole::Owner,
+    ]);
+
+    // Every tenant route sits behind a literal `org/` segment (ADR-031), so a handle can no
+    // longer shadow anything and needs no reserved-word list.
+    $this
+        ->actingAs($user)
+        ->patch(route('organizations.update', $organization), [
+            'name' => $organization->name,
+            'handle' => 'settings',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($organization->fresh()->handle)->toBe('settings');
+});
+
+test('a malformed handle is rejected', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+    $organization->memberships()->create([
+        'user_id' => $user->id,
+        'role' => OrganizationRole::Owner,
+    ]);
+
+    $this
+        ->actingAs($user)
+        ->patch(route('organizations.update', $organization), [
+            'name' => $organization->name,
+            'handle' => 'Not A Slug!',
+        ])
+        ->assertSessionHasErrors('handle');
 });
 
 test('an organization may be named after a reserved route prefix', function () {
     $user = User::factory()->create();
 
+    // The name is free text — only the handle has to coexist with the application's routes.
     $this
         ->actingAs($user)
         ->post(route('organizations.store'), ['name' => 'Settings'])
@@ -88,7 +175,7 @@ test('an organization may be named after a reserved route prefix', function () {
     $this->assertDatabaseHas('organizations', ['name' => 'Settings']);
 });
 
-test('the organization edit page can be rendered', function () {
+test('the organization general settings page can be rendered', function () {
     $user = User::factory()->create();
     $organization = Organization::factory()->create();
 
@@ -101,9 +188,9 @@ test('the organization edit page can be rendered', function () {
     $response
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('organizations/edit')
-            ->where('members.0.role', OrganizationRole::Owner->value)
-            ->where('members.0.role_label', OrganizationRole::Owner->label()),
+            ->component('organizations/settings/general')
+            ->where('organization.name', $organization->name)
+            ->where('organization.handle', $organization->handle),
         );
 });
 
@@ -429,4 +516,29 @@ test('guests cannot access organizations', function () {
     $response = $this->get(route('organizations.index'));
 
     $response->assertRedirect(route('login'));
+});
+
+test('the organization members settings page lists members and invitations', function () {
+    $user = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    $organization->members()->attach($user, ['role' => OrganizationRole::Owner->value]);
+
+    $this
+        ->actingAs($user)
+        ->get(route('organizations.members.index', $organization))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('organizations/settings/members')
+            ->where('members.0.role', OrganizationRole::Owner->value)
+            ->where('members.0.role_label', OrganizationRole::Owner->label()),
+        );
+});
+
+test('a non member cannot open the organization settings', function () {
+    $outsider = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    $this->actingAs($outsider)->get(route('organizations.edit', $organization))->assertForbidden();
+    $this->actingAs($outsider)->get(route('organizations.members.index', $organization))->assertForbidden();
 });

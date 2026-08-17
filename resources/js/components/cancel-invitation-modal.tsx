@@ -33,7 +33,7 @@ export default function CancelInvitationModal({
         }
 
         router.visit(
-            destroyInvitation([organization.publicId, invitation.code]),
+            destroyInvitation([organization.handle, invitation.code]),
             {
                 onStart: () => setProcessing(true),
                 onFinish: () => setProcessing(false),

@@ -34,10 +34,10 @@ file produces a change that silently reverts.
 import { edit } from '@/actions/App/Http/Controllers/Organizations/OrganizationController';
 
 // correct
-<Link href={edit({ organization: organization.slug })}>Settings</Link>
+<Link href={edit({ organization: organization.handle })}>Settings</Link>
 
 // wrong
-<Link href={`/settings/organizations/${organization.slug}`}>Settings</Link>
+<Link href={`/org/${organization.handle}/settings`}>Settings</Link>
 ```
 
 Route changes should surface as TypeScript errors, not as runtime 404s. That is the entire
@@ -89,10 +89,10 @@ A menu item cannot also be a dialog trigger. Open the dialog from state instead 
 
 ### Navigation has two levels (ADR-016)
 
-| Level    | Where                             | Holds                                                                                                  |
-| -------- | --------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Areas    | Row two of `app-header`           | Tenant-scoped areas: Overview today; later Servers / Applications / DNS. Not settings or organizations |
-| Sections | `<SectionNav>` beside the content | The sections _of one resource_: a server's facilities, an application's tabs, the settings pages       |
+| Level    | Where                             | Holds                                                                                               |
+| -------- | --------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Areas    | Row two of `app-header`           | Tenant-scoped areas: Overview and Settings today; later Servers / Sites / DNS. Not account settings |
+| Sections | `<SectionNav>` beside the content | The sections _of one resource_: a server's facilities, an application's tabs, the settings pages    |
 
 The shell components, all reusable:
 
@@ -155,10 +155,23 @@ A section of a single resource **never** goes in the top nav. `SectionNav` is co
 purpose — different application types will present different sections, which a fixed global
 nav could not express.
 
-**Account settings and organization administration reach the app through the avatar menu**, not the
-tab row. `UserMenuContent` links to Profile; `SettingsLayout` carries Security, Organizations and
-Appearance. Organizations was tried as its own area and moved back — it is touched rarely enough
-that a permanent top-level slot overstates it.
+**Settings is the organization's own area** (`/org/{organization}/settings`), in row two, with
+`OrganizationSettingsLayout` supplying its `SectionNav`: General and Members today, Roles and
+Billing later. It earned that slot when ADR-031 made it tenant-scoped — before that it lived under
+`/settings/…`, where a top-level tab would have been wrong.
+
+**Account settings are not an area.** `AccountLayout` carries Profile and Security, reached
+through the avatar menu. It is named "Account" because "Settings" now means the organization's
+settings.
+
+**Theme lives in the avatar menu, not in Account settings** — it is a per-device display
+preference, so it belongs where it can be flipped from any page. It is rendered inside a
+`DropdownMenuLabel`, which is the one menu slot that accepts arbitrary content; plain elements
+would break React Aria's menu collection.
+
+**There is no organizations list page.** Creating an organization happens in the header switcher
+and deleting one on its General settings tab, so `/org` is a redirect into the organization you
+are already in rather than a page.
 
 Adding an area means adding it to `areaNavItems` **and** to the mobile sheet in the same
 file; the two levels do not collapse automatically on small screens.
@@ -174,7 +187,7 @@ to them and expect it to appear.
 
 ### The tenant is in the URL
 
-Tenant-scoped routes carry the organization slug as their first segment. `SetOrganizationUrlDefaults` fills
+Tenant-scoped routes are `/org/{organization}/…` (ADR-031). `SetOrganizationUrlDefaults` fills
 it server-side, so Wayfinder helpers for organization-prefixed routes usually need no explicit organization
 argument. Do not construct these URLs by hand.
 

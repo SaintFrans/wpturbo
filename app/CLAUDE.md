@@ -40,19 +40,21 @@ decision — ask first.
 
 ### Route keys
 
-Tenant resources are addressed by a random, immutable `public_id`, never by a sequential id and
-never by a slug of the name ([ADR-027](../docs/DECISIONS.md)). `Organization` gets one from the
-`GeneratesPublicId` trait; **reuse that trait** for `Site`, `Server` and `Client` rather than
-inventing a second scheme.
+Tenant resources are addressed by a readable `handle`, seeded from the name once at creation and
+then independent of it ([ADR-030](../docs/DECISIONS.md)). `Organization` gets one from the
+`GeneratesHandle` trait; reuse that trait for `Site`, `Server` and `Client` rather than inventing a
+second scheme.
 
-Two rules come with it. The identifier is assigned in `creating` and has no `updating`
-counterpart — renaming must never change a URL. And uniqueness is checked with the soft-delete
-scope dropped, so a deleted record's identifier is never reissued to a different tenant. That
-also keeps the trait usable by resources that hard-delete, where the scope was never registered.
+Three rules come with it, and each exists because of a specific failure:
 
-Because the identifier is no longer derived from the name, names need no reserved-word
-validation: `App\Rules\OrganizationName` was deleted and ADR-008 is retired. An organization may
-legitimately be called "Settings".
+- **Seeded on `creating` only.** No `updating` hook keyed on the name — renaming must never change
+  a URL. That coupling is what silently broke every bookmark before ADR-030.
+- **Never reissued.** Uniqueness spans the live column, soft-deleted rows, and
+  `organization_handles`, which records every handle ever held. Without that last one, changing a
+  handle would release it for another tenant to claim, and stale bookmarks would resolve to the
+  wrong customer.
+- **Validated on the handle, not the name.** `App\Rules\Organizations\OrganizationHandle` holds
+  the reserved-word list. Names are free text — an organization may be called "Settings".
 
 ## Non-negotiables
 

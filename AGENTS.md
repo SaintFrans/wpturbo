@@ -326,10 +326,14 @@ Decided, see [ADR-025](docs/DECISIONS.md), [ADR-017](docs/DECISIONS.md) and
 
 Four more decisions are accepted and equally unimplemented:
 
-- **The URL identifier is a random, immutable `public_id`**, not a name-derived slug
-  ([ADR-027](docs/DECISIONS.md)). Renaming never changes a URL, organization names are free
-  text, and the reserved-word list from ADR-008 is retired. Reuse the same generator for
-  `Site`, `Server` and `Client` route keys.
+- **Tenant routes are `/org/{organization}/…`** ([ADR-031](docs/DECISIONS.md)). The literal
+  `org/` segment keeps the handle namespace free, so no reserved-word list is needed and
+  `/settings/…` is exclusively personal. There is one route parameter: `{organization}`.
+- **The URL identifier is a `handle`** ([ADR-030](docs/DECISIONS.md)), seeded from the name once
+  at creation and then independent of it. Renaming never changes a URL; changing the handle is a
+  separate, explicit action that does break existing links. A handle is never reissued —
+  uniqueness spans the live column, soft-deleted rows and `organization_handles`. Reuse
+  `GeneratesHandle` for `Site`, `Server` and `Client`.
 - **Admins manage members ranking below their own role** ([ADR-028](docs/DECISIONS.md)) —
   Members only, never another Admin or the Owner, and never inviting above Member.
 - **Recovering an abandoned organization is a manual, documented procedure**
@@ -338,14 +342,13 @@ Four more decisions are accepted and equally unimplemented:
   Every member sees everything in their organization. If you are about to write a resource query
   for `Site` or `Server`, read Q13 first — that is the moment the assumption sets.
 
-**Half of this is implemented.** The rename and the `public_id` change landed on 2026-08-17
-(phases 1 and 5 of [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md)); `composer
-ci:check` is green on 98 tests. Four phases remain, and until they land the code still does the
-old thing in four specific places:
+**Half of this is implemented.** The rename and the handle change landed on 2026-08-17
+(phases 1, 4 and 5 of [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md)); `composer
+ci:check` is green on 103 tests. Three phases remain, and until they land the code still does the
+old thing in three specific places:
 
 - `is_personal` still exists, and registration still creates a "personal" organization (phase 2)
 - visiting a prefixed URL still writes `current_organization_id` (phase 3)
-- organization administration still sits at `/settings/organizations/…` (phase 4)
 - Admins still cannot manage members (phase 6)
 
 Do the rest before `Site`, `Server` or `Client` exist; every new domain multiplies the work. The

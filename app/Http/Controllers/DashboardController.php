@@ -27,7 +27,7 @@ class DashboardController extends Controller
                 'inviterName' => $invitation->inviter->name,
                 'organization' => [
                     'name' => $invitation->organization->name,
-                    'publicId' => $invitation->organization->public_id,
+                    'publicId' => $invitation->organization->handle,
                 ],
             ]);
 

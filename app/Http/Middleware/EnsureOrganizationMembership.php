@@ -24,7 +24,7 @@ class EnsureOrganizationMembership
 
         $this->ensureOrganizationMemberHasRequiredRole($user, $organization, $minimumRole);
 
-        if ($request->route('current_organization') && ! $user->isCurrentOrganization($organization)) {
+        if (! $user->isCurrentOrganization($organization)) {
             $user->switchOrganization($organization);
         }
 
@@ -57,10 +57,10 @@ class EnsureOrganizationMembership
      */
     protected function organization(Request $request): ?Organization
     {
-        $organization = $request->route('current_organization') ?? $request->route('organization');
+        $organization = $request->route('organization');
 
         if (is_string($organization)) {
-            $organization = Organization::where('public_id', $organization)->first();
+            $organization = Organization::where('handle', $organization)->first();
         }
 
         return $organization;

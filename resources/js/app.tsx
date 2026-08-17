@@ -4,7 +4,8 @@ import { Toaster } from '@/components/ui/sonner';
 import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
-import SettingsLayout from '@/layouts/settings/layout';
+import OrganizationSettingsLayout from '@/layouts/organizations/settings-layout';
+import AccountLayout from '@/layouts/settings/layout';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -16,9 +17,12 @@ createInertiaApp({
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;
+            // Order matters: the organization settings area is more specific than the
+            // organizations list beneath it.
+            case name.startsWith('organizations/settings/'):
+                return [AppLayout, OrganizationSettingsLayout];
             case name.startsWith('settings/'):
-            case name.startsWith('organizations/'):
-                return [AppLayout, SettingsLayout];
+                return [AppLayout, AccountLayout];
             default:
                 return AppLayout;
         }

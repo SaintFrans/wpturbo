@@ -3,7 +3,7 @@ export type OrganizationRole = 'owner' | 'admin' | 'member';
 export type Organization = {
     id: number;
     name: string;
-    publicId: string;
+    handle: string;
     isPersonal: boolean;
     role?: OrganizationRole;
     roleLabel?: string;
@@ -37,7 +37,7 @@ export type DashboardInvitation = {
     inviterName: string;
     organization: {
         name: string;
-        publicId: string;
+        handle: string;
     };
 };
 

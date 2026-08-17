@@ -45,7 +45,7 @@ class UserFactory extends Factory
     {
         return $this->afterCreating(function ($user) {
             $organization = Organization::factory()->personal()->create([
-                'name' => $user->name."'s Organization",
+                'name' => $user->name,
             ]);
 
             $organization->members()->attach($user, [

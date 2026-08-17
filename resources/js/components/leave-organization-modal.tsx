@@ -30,7 +30,7 @@ export default function LeaveOrganizationModal({
             return;
         }
 
-        router.visit(leaveOrganizationAction(organization.publicId), {
+        router.visit(leaveOrganizationAction(organization.handle), {
             onStart: () => setProcessing(true),
             onFinish: () => setProcessing(false),
             onSuccess: () => onOpenChange(false),
