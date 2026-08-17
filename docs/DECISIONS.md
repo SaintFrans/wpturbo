@@ -26,6 +26,609 @@ Format:
 
 ---
 
+## ADR-029 — Recovering an abandoned organization is a manual, documented procedure
+
+**2026-08-17** · **Status**: Accepted. Closes the involuntary case
+[ADR-020](#adr-020--ownership-can-be-transferred-the-database-enforces-exactly-one-owner) left open.
+
+**Decision** — There is no self-service route to take over an organization from an absent Owner.
+Recovery is an operator procedure, written down in [SECURITY.md](SECURITY.md) so it is executed
+the same way every time rather than improvised. The procedure requires, in order: identity
+verification of the requester; confirmation that they already hold Admin in that organization;
+notification to the current Owner's address; a waiting period before the change takes effect;
+and a record of who performed it and why.
+
+**Alternatives** — An inactivity-triggered takeover an Admin can request after N days without an
+Owner login; requiring every organization to hold a second administrator from creation.
+
+**Why** — ADR-020 gives a departing Owner a way out, but not the case where they simply stop
+responding — left the company, unreachable, died. That gap is real once an organization owns
+live servers.
+
+An automated takeover is the obvious fix and the wrong one at this stage. It is, by
+construction, a mechanism for transferring control of an organization away from its Owner, so
+every parameter in it is an attack surface: if inactivity detection is wrong, or the waiting
+period is short, or the notification goes to an address the Owner no longer reads, it becomes a
+path to hijacking an organization holding administrative access to customer infrastructure.
+Building that correctly costs more than the problem is worth at a volume that will be a handful
+of cases a year.
+
+Requiring a second administrator was rejected because it contradicts
+[ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed): not everyone
+signing up is a company, and a sole trader has no second person to nominate.
+
+**The honest limitation:** this is only as good as the operator process behind it, and there is
+no operator function yet. Until there is, "documented procedure" means a known answer to a
+question that will eventually be asked — not a capability that exists today. That is still
+better than deciding it under pressure with a customer waiting.
+
+**Consequences**
+
+- The procedure is written into [SECURITY.md](SECURITY.md). It is not code, and no ADR should be
+  read as implying it is automated.
+- Staff performing it have database-level access, which [SECURITY.md](SECURITY.md) §1 already
+  lists as explicitly out of scope for the threat model. This ADR does not change that; it does
+  make the absence of an audit trail (gap G5) more pointed, since an ownership change is exactly
+  the event you would want a record of.
+- Revisit when either becomes true: manual handling stops scaling, or an audit log exists to
+  back an automated flow. Not before.
+
+---
+
+## ADR-028 — Admins manage members below their own role
+
+**2026-08-17** · **Status**: Accepted. Amends
+[ADR-005](#adr-005--permissions-are-an-enum-decoupled-from-roles).
+
+**Decision** — `member:add`, `member:update`, `member:remove` and `invitation:create` are granted
+to Admin as well as Owner, with one constraint: an actor may only affect a membership, or issue
+an invitation for a role, that ranks **strictly below their own**. `OrganizationRole::level()`
+(Owner 3, Admin 2, Member 1) already exists for this and is currently unused by any route.
+
+In practice: an Admin may add, remove and re-role Members, and may invite people as Members. An
+Admin may not touch another Admin or the Owner, may not invite anyone as Admin or Owner, and
+therefore cannot escalate themselves or create a peer. `organization:delete` stays Owner-only.
+
+| Permission            | Owner | Admin | Member |
+| --------------------- | :---: | :---: | :----: |
+| `organization:update` |  ✅   |  ✅   |   —    |
+| `organization:delete` |  ✅   |   —   |   —    |
+| `member:add`          |  ✅   |  ✅¹  |   —    |
+| `member:update`       |  ✅   |  ✅¹  |   —    |
+| `member:remove`       |  ✅   |  ✅¹  |   —    |
+| `invitation:create`   |  ✅   |  ✅¹  |   —    |
+| `invitation:cancel`   |  ✅   |  ✅   |   —    |
+
+¹ Only against a role ranking below the actor's own.
+
+**Alternatives** — Leave all member management with the Owner, as today; grant Admins removal
+only, without role changes.
+
+**Why** — The current split has a failure mode that is a security problem rather than an
+inconvenience. Only the Owner can remove a member. If the Owner is on holiday and someone
+leaves the company suddenly, nobody can revoke that person's access to an organization holding
+administrative control over customer servers. The safest-looking permission map produces the
+least safe outcome, because the bus factor for revocation is one.
+
+The rank constraint is what makes widening this safe: everything the Owner needs protecting from
+— self-promotion, removing the Owner, minting a peer Admin — is blocked by the same single rule,
+and the rule is one comparison rather than a set of special cases. It is also the model GitHub,
+Slack and Google Workspace use, so it matches what users already expect.
+
+**Granting removal without role changes was rejected** as a half-permission: harder to explain
+than the whole one, and it would leave the `member:add` / `invitation:create` split — invisible
+to users, since both mean "someone new joins" — sitting there unexplained.
+
+**Stated cost.** An Admin can now remove a Member without the Owner's involvement. That is the
+point, and it is a real widening: an Admin acting maliciously or carelessly can cut a colleague's
+access. The rank rule bounds the blast radius to roles below them, and it does not reach any
+resource — this is membership only. It does raise the value of gap G5: an ownership or membership
+change is now something more than one person can perform, and there is still no record of who did
+it.
+
+**Consequences**
+
+- The rank check lives in `OrganizationPolicy` (`updateMember`, `removeMember`, `inviteMember`),
+  not in the permission map. Permissions stay plain role→capability booleans per ADR-005; the
+  comparison is an additional guard, so the enum keeps reading as a specification.
+- `invitation:create` must validate the *invited role* against the actor's level, not only the
+  action. An Admin inviting an Admin is the escalation path this closes.
+- `member:add` and `invitation:create` now map identically for both roles. They are kept
+  separate because a future "add an existing platform user directly" flow would use the first
+  while email invitations use the second. If that flow never appears, merge them.
+- Tests required, all negative: an Admin cannot remove another Admin, cannot remove the Owner,
+  cannot promote anyone to Admin or Owner, cannot invite above Member — and can remove a Member.
+- [SECURITY.md](SECURITY.md) §3 "Privilege boundaries" is rewritten by this; it currently states
+  the opposite.
+
+---
+
+## ADR-027 — The tenant URL identifier is a random, immutable public ID
+
+**2026-08-17** · **Status**: Accepted. Supersedes the slug-generation half of
+[ADR-006](#adr-006--slug-uniqueness-includes-soft-deleted-teams); retires
+[ADR-008](#adr-008--team-names-are-validated-against-reserved-route-prefixes); amends
+[ADR-007](#adr-007--tenancy-is-scoped-by-team-slug-in-the-url-prefix).
+
+**Decision** — The first URL segment stops being a slug derived from the organization's name and
+becomes a randomly generated, opaque, **immutable** public identifier: `/k7m3xq9v2rft/sites/12`.
+It is generated once at creation, never derived from anything, and never changes — renaming an
+organization does not touch it, and there is no action that does.
+
+The column is renamed `slug` → `public_id`, since "slug" would be a lie about what it holds.
+Format: twelve lowercase alphanumeric characters from an alphabet excluding visually ambiguous
+ones (`0`/`o`, `1`/`l`/`i`), so it survives being read aloud, copied by hand or pasted into a
+support ticket.
+
+**Alternatives** — Freeze the name-derived slug at creation, with an explicit opt-in action to
+change it (the option originally recommended); keep regenerating it on rename, as today;
+sequential integer IDs.
+
+**Why** — Today `Organization::booted()` regenerates the slug on rename, so renaming an
+organization silently invalidates every bookmark, every link shared in Slack and every URL in
+mail history. That is the exact failure ADR-006 was written to prevent, reintroduced by a button
+in the settings screen.
+
+Freezing a name-derived slug fixes that, but keeps three other problems. A random identifier
+removes all four at once:
+
+1. **Links cannot break on rename** — not by policy, but by construction. There is no code path
+   that changes the identifier, so there is nothing to get wrong later.
+2. **The `acme-2` collision suffix disappears.** Two organizations may share a name freely.
+   `GeneratesUniqueOrganizationSlugs`, with its slug-parsing and numeric-suffix logic, collapses
+   into generate-and-retry-on-collision.
+3. **Organization names become genuinely free text.** ADR-008 exists only because a name-derived
+   slug occupies the first URL segment, so an organization called "Settings" would shadow the
+   application's own routes. A twelve-character random token cannot collide with any route
+   literal, so the reserved-word list and the whole class of bug it guards against stop existing.
+4. **The customer's name leaves the URL.** This is the part worth the most. Today every URL
+   contains the agency's name, which means the identifier is guessable: anyone can probe
+   `/some-agency/` and learn from the response whether that agency is a customer. A random
+   identifier removes that inference entirely — a property DATA_MODEL.md already argued for when
+   it rejected sequential IDs, applied consistently rather than half-way.
+
+**Stated cost — this is a real loss, not a free win.** URLs stop being human-readable.
+[ADR-007](#adr-007--tenancy-is-scoped-by-team-slug-in-the-url-prefix) and DATA_MODEL.md both
+explicitly valued readability, on the grounds that agency staff share links internally, and
+`/k7m3xq9v2rft/sites/12` tells a reader nothing about which organization they are about to open.
+
+That cost is accepted because the property ADR-007 actually needed is *unambiguity* — one URL
+resolves to exactly one tenant, so a shared link never shows the reader someone else's data —
+and that is fully preserved. Readability was a convenience layered on top. The organization
+switcher and the page header still name the organization on arrival, so a reader who opens the
+link is not confused; they simply cannot tell in advance from the URL alone.
+
+**Consequences**
+
+- `organizations.slug` → `organizations.public_id`: unique, generated on create, **immutable
+  thereafter**. No rename path, no redirect table, no reserved slugs to maintain.
+- **ADR-006's reasoning is preserved and its cost disappears.** The uniqueness check keeps
+  `withTrashed()`, so a deleted organization's identifier is never reissued and a stale bookmark
+  can never resolve to a different tenant. What goes away is the "occasional ugly `acme-2`" that
+  entry accepted as the price.
+- **ADR-008 is retired.** `OrganizationName` keeps ordinary validation — length, character set,
+  required — but the reserved-word list and the route-prefix collision check are removed, because
+  the condition that made them load-bearing no longer exists. Note the inversion: validation moves
+  from *user input* to *generated output*, and the generator has nothing to validate against.
+- **The same generator is reused for `Site`, `Server` and `Client` route keys**, settling
+  DATA_MODEL.md's "route keys for tenant resources should be non-sequential" constraint with one
+  shared implementation rather than a rule each new table has to remember.
+- The generator retries on collision against `withTrashed()`. At twelve characters over a
+  thirty-ish character alphabet, a collision is a formality, but the retry is one line and makes
+  the guarantee absolute rather than probabilistic.
+- Existing local databases must be rebuilt. There is no production data, so no backfill migration
+  is written — see [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md).
+
+---
+
+## ADR-026 — `app/` stays type-first, with a domain subfolder inside each type
+
+**2026-08-17** · **Status**: Accepted. **Supersedes ADR-021**
+
+**Decision** — Reverses [ADR-021](#adr-021--app-moves-to-domain-folders). `app/` keeps Laravel's
+type-first layout (`app/Models`, `app/Policies`, `app/Actions`, `app/Http/Controllers`, …).
+Inside each type folder, files are grouped into a subfolder per domain:
+`app/Models/Organizations/`, `app/Policies/Organizations/`, later `app/Actions/Sites/`,
+`app/Models/Servers/`. Files that belong to no single domain — `User`, `Providers`,
+`Console`, Fortify actions, Inertia middleware, shared validation-rule traits — stay flat in
+their type folder.
+
+The subfolder is applied consistently from the start, including where a type currently holds
+only one file for that domain.
+
+**Alternatives** — Domain-first folders (`app/Organizations/Http/Controllers/…`), which is
+what ADR-021 decided; leaving the current half-applied state, where controllers, requests,
+actions and notifications have a `Teams/` subfolder but models, policies, rules, data and
+enums are flat.
+
+**Why** — ADR-021's argument — that nothing in a type-first tree represents "this is the Sites
+feature" — is a scaling argument, and the tree is not at that scale. Counted on 2026-08-17:
+
+| Folder                       | Files |
+| ---------------------------- | ----- |
+| `app/Http/Requests`          | 9     |
+| `app/Http/Controllers`       | 7     |
+| `app/Models`, `app/Concerns` | 4     |
+| `app/Actions`, `app/Rules`   | 3     |
+| `app/Data`, `app/Enums`      | 2     |
+| `app/Policies`, `app/Notifications` | 1 |
+
+Thirty-six files. Against that, domain-first costs friction with everything the ecosystem
+assumes: `make:` command defaults, Larastan, the Boost guidelines' "stick to existing
+directory structure", and every developer or tool that expects `app/Models`. Half of this
+decision's shape is also already in the tree (`Http/Controllers/Teams`, `Http/Requests/Teams`,
+`Actions/Teams`, `Notifications/Teams`), so this is completing an existing pattern rather
+than introducing one.
+
+Applying the subfolder even to single-file types looks like ceremony today and is deliberate:
+`Servers`, `Sites` and `Clients` land within weeks, and the alternative is moving the same
+files a second time.
+
+**Policy auto-discovery was checked and is not a factor.** Laravel 13 resolves a policy by
+substituting `Policies\` for `Models\` in the model's namespace, so both
+`App\Policies\Organizations\OrganizationPolicy` (this decision) and
+`App\Organizations\Policies\OrganizationPolicy` (ADR-021) are discovered without explicit
+registration. Recorded so nobody re-derives it as an argument either way.
+
+**Consequences**
+
+- New domains add a subfolder inside each relevant type folder, not a new top-level folder.
+- ADR-010's note about "no domain folder to host a scoped `CLAUDE.md` yet" is resolved
+  differently than ADR-021 planned: scoped guidance stays path-based
+  (`app/Http/Controllers/Organizations/CLAUDE.md`), following whatever directory the guidance
+  actually concerns.
+- This is reversible. Moving from type-first-with-subfolders to domain-first later is a
+  mechanical relocation, which is part of why the cheaper option is correct now.
+- Revisit if a single domain's file count makes its slice of the tree hard to hold in one
+  view — roughly, when one domain owns more files than the whole of `app/` does today.
+
+---
+
+## ADR-025 — `Team` becomes `Organization`; the personal team is removed
+
+**2026-08-17** · **Status**: Accepted. **Supersedes [ADR-004](#adr-004--every-user-gets-a-personal-team-at-registration)**;
+partially reverses [ADR-017](#adr-017--clients-are-a-grouping-entity-inside-a-team-not-a-second-tenancy-level);
+amends [ADR-003](#adr-003--the-current-team-is-stored-on-the-user-record),
+[ADR-016](#adr-016--top-navigation-for-areas-contextual-navigation-for-resources) and
+[ADR-022](#adr-022--tenant-resources-use-the-current_team-prefix-team-administration-stays-at-settings).
+
+**Decision** — The tenancy boundary is renamed from `Team` to `Organization` throughout: model,
+table, enums, DTOs, middleware, routes, URL segment and frontend types. Three things change
+with it, and they are the reason this is an ADR rather than a rename commit:
+
+1. **`is_personal` is removed.** There is no special first team. Registration creates a normal
+   organization named after the user, renameable from settings like any other.
+2. **A user can belong to several organizations, and this is a first-class scenario**, not a
+   grouping mechanism. The intended case is a person who genuinely works for more than one
+   organization — a freelancer with their own practice plus one or more agencies — switching
+   without logging out.
+3. **Visiting an organization-prefixed URL no longer writes `current_organization_id`.** The
+   URL scopes that request only; the stored current organization changes on an explicit
+   switch, or on landing at `/`.
+
+**Alternatives** — Keep the name `Team` and only remove the personal-team concept; rename to
+`Account`; keep `Team` as a layer *inside* `Organization`, as Laravel Forge does.
+
+**Why** — `Team` was never a second layer: it is already the tenancy boundary, the resource
+owner and the permission scope. The name was the problem, and it caused two concrete
+failures.
+
+First, it invited [ADR-017](#adr-017--clients-are-a-grouping-entity-inside-a-team-not-a-second-tenancy-level)'s
+guidance to name teams by function — `Front-end`, `Back-end`, `QA`. That guidance is
+unworkable against [ADR-019](#adr-019--resources-belong-directly-to-their-team-cross-team-sharing-is-deferred),
+which gives each resource exactly one owning team: a site that both front-end and back-end
+work on cannot sit in both. Under "organization", the question does not arise — an
+organization is an organization, and grouping inside it is what `Client` is for.
+
+Second, "team" made the personal team read as a feature rather than an implementation detail.
+In practice every user carried a permanently visible, undeletable tenant they never asked
+for, and — because it was the current organization on first login — the likely home of the
+first server or site created by accident.
+
+`Organization` is also what Laravel Forge calls the same concept, which matters for a product
+whose users are already Forge and Ploi customers.
+
+**`Account` was rejected on a naming collision**, not on substance: users read "account" as
+"my account" — profile, password, billing — so `/settings/account` (the person) would sit
+beside `Account` (the tenant) at exactly the point where this rename is buying clarity.
+
+**Keeping a `Team` layer inside `Organization`, as Forge does, was rejected as premature.**
+The needs it would serve are better served by what already exists or is already decided:
+grouping by `Client` (ADR-017), and capability by `OrganizationRole` (ADR-005). The one need
+neither covers — restricting a member to a subset of resources — is a visibility problem, and
+the traceable path for it is scoping a membership to a set of clients, not a second grouping
+entity. That remains undecided and is not implied here — see [Q13](OPEN_QUESTIONS.md).
+
+**Why zero organizations is not a valid state.** A user's last membership can disappear
+without their involvement: an owner removes them, or the organization is deleted. Two
+defences, replacing the single `is_personal` special case:
+
+- **Voluntary** — a user cannot leave or delete their last organization.
+- **Involuntary** — if a user's last membership disappears anyway, an organization is created
+  for them, named after them.
+
+Allowing a zero-organization state with an onboarding screen was considered and rejected. It
+would have been defensible — the URL prefix (ADR-007) means the null case collapses to a
+single middleware guard rather than spreading through every feature — but it trades a
+guaranteed invariant for a screen, and every downstream feature would have to be written
+against a tenant that might not be there. The auto-create keeps ADR-004's actual benefit
+(code may assume a current organization resolves) while dropping the part users saw.
+
+**Consequences**
+
+- The full rename map, file inventory, semantic changes and execution order are in
+  [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md). This ADR records *why*; that document
+  records *what to change*.
+- **ADR-004 is superseded.** `is_personal` and `personalTeam()` are gone. Code may still
+  assume a current organization resolves for any authenticated user — that invariant is
+  preserved, by different means.
+- **ADR-017 is partially reversed.** The free-form and functional organization-naming guidance
+  is withdrawn: an organization is one organization, normally one per real-world entity. The
+  `Client` entity, and everything else ADR-017 decided about it, is unchanged.
+- **ADR-022 is simplified.** Its two-shape rule and the "does the tenant *have* it, or does the
+  user *configure* it" test are no longer needed. Everything belonging to the organization,
+  members included, lives under `/{current_organization}/…`. `/settings/…` becomes purely
+  personal: profile, security, appearance. The one exception is the organization list-and-create
+  page, which belongs to no single tenant and stays outside the prefix.
+- **ADR-016 is amended in one place.** The switcher stays in row one beside the logo, as
+  originally specified — multi-organization membership is now an endorsed scenario, so the
+  switcher is discoverability, not clutter. Nothing else in ADR-016 changes; the renaming of
+  its "Teams" language is editorial.
+- **ADR-003 is amended** by point 3 above. `current_organization_id` still lives on the user
+  row and still survives logout and device changes; only the implicit write on prefix
+  navigation is removed. Following a shared link no longer repoints the reader's other tabs.
+- ADR-005, ADR-006, ADR-007, ADR-008, ADR-009, ADR-019, ADR-020 and ADR-023 are unaffected in
+  substance by *this* entry. They are renamed, not reconsidered — though ADR-005 is later
+  amended by ADR-028, and ADR-006/007/008 by ADR-027.
+- Two questions this creates about future social login are recorded as
+  [Q11 and Q12](OPEN_QUESTIONS.md) rather than answered here.
+- **Do this before `Site`, `Server` and `Client` exist.** Today the rename touches roughly 90
+  files across one fully tested feature, with no production data, so the migrations are
+  rewritten rather than stacked. Each new domain multiplies that.
+
+---
+
+## ADR-024 — Add `pest-plugin-browser`, scoped to the three lockout-risk auth flows
+
+**2026-08-17** · **Status**: Accepted
+
+**Decision** — Resolves [Q9](OPEN_QUESTIONS.md). Add `pestphp/pest-plugin-browser` as a dev
+dependency. Coverage is scoped to the three flows that can lock a user out of their own
+account if silently broken: two-factor setup and challenge, passkey registration, and
+password confirmation. This is not a general commitment to frontend/browser test coverage
+for every UI primitive.
+
+**Alternatives** — Add the plugin with broad coverage across every dialog and primitive;
+defer the dependency decision entirely and rely on `tsc`, lint, the build, and manual
+checking, as today.
+
+**Why** — The React Aria migration (ADR-015) rewrote all three of these flows and was
+verified by type-checking plus a manual look at the *unauthenticated* pages — the
+authenticated, highest-consequence flows were never exercised. `tsc`, lint and the Pest
+backend suite all stay green if a dialog silently stops opening; only a real browser
+assertion catches that. Scoping to three flows keeps the Playwright dependency and CI time
+bounded while closing the actual risk, rather than taking on general UI-coverage debt as a
+side effect.
+
+**Consequences**
+
+- `pestphp/pest-plugin-browser` and its Playwright browser binaries become a project
+  dependency; CI needs to install/cache browsers.
+- New tests live wherever this project's Pest browser tests are conventionally placed
+  (`tests/Feature/` alongside the existing suite, or a `tests/Browser/` directory if one is
+  introduced — follow whichever the first test establishes).
+- Each test uses `visit()` with `actingAs()` and asserts both that the dialog/flow completes
+  and that no JavaScript error was thrown.
+- This does not retroactively mandate browser tests for every future dialog. Extending
+  coverage beyond these three flows is a new decision, not implied by this one.
+
+---
+
+## ADR-023 — Invitation emails are rate-limited and queued
+
+**2026-08-17** · **Status**: Accepted
+
+**Decision** — Resolves [Q8](OPEN_QUESTIONS.md). `TeamInvitationController::store` gets a
+rate limiter matching the shape already used for login/2FA/passkeys. The invitation
+notification is marked `ShouldQueue`, dispatched onto the already-configured
+`QUEUE_CONNECTION=database` connection instead of being sent inline.
+
+**Alternatives** — Add only the rate limiter and leave sending synchronous; leave both as
+they are.
+
+**Why** — Today, any Owner or Admin can trigger unbounded outbound email with no rate limit
+— unlike every other user-triggered action that sends something (login, 2FA, passkeys all
+have one) — and a slow or failing mail provider directly slows or fails the invite request
+because sending happens inline. Queuing is not a bigger lift than it looks: Laravel's
+`php artisan dev` (what `composer dev` / `vp run dev` already runs) starts a
+`queue:listen` process by default, so local development gets a working queue worker for
+free with no change to the dev stack. The only real decision this creates is how a worker
+runs in **production**, which needs answering before agent work (Q2) regardless — updates
+and provisioning cannot be synchronous — so establishing the pattern now, on a low-stakes
+notification, is cheaper than inventing it under pressure later.
+
+**Consequences**
+
+- A named rate limiter (e.g. `invitation`) is added in `FortifyServiceProvider` or an
+  equivalent central location, keyed by the inviting user, and applied as route middleware
+  on `TeamInvitationController::store`.
+- The invitation notification implements `ShouldQueue`; `Notification::route('mail', …)`
+  dispatch is unchanged otherwise.
+- Local development needs no new process — `queue:listen` is already part of the default
+  `artisan dev` set.
+- **Production must run a queue worker.** This is a deployment requirement to track
+  wherever hosting/deployment is decided (Laravel Cloud's managed worker, a supervisor
+  process, or equivalent) — not optional once this ADR lands.
+- Failed queued jobs use Laravel's standard failed-jobs table; no custom failure handling is
+  introduced by this decision.
+
+---
+
+## ADR-022 — Tenant resources use the `/{current_team}/…` prefix; team administration stays at `/settings/…`
+
+**2026-08-17** · **Status**: Accepted, **simplified by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed)**
+
+> The prefix rule for tenant resources stands. The split does not: organization administration
+> — general settings, members, invitations — moves *inside* the prefix, at
+> `/{current_organization}/settings/…`. `/settings/…` becomes purely personal. The
+> "does the tenant *have* it, or does the user *configure* it" test is therefore no longer
+> needed and should not be applied to new features. The only route that stays outside the
+> prefix is the organization list-and-create page, which belongs to no single tenant.
+
+**Decision** — Resolves [Q4](OPEN_QUESTIONS.md). The two coexisting route shapes are both
+kept, with their scope made explicit rather than left to precedent: anything under a `Team`
+that is a **resource** the team works on — Servers, Sites, Clients, Domains — is routed
+`/{current_team}/…`, matching what ADR-007 already established for the dashboard. Anything
+that is **team administration** — creating, renaming, deleting a team, managing its
+membership — stays at `/settings/teams/…`, outside the prefix, alongside the rest of
+`/settings/…`.
+
+**Alternatives** — Move team administration under the prefix too, for one consistent shape
+everywhere a `{team}` parameter appears.
+
+**Why** — This is the shape ADR-016 already used without stating the rule: team
+administration sits with `/settings/…` because it is something a user does to their
+relationship with a team (which team am I configuring), not something they do inside a
+team's working context. A URL like `/acme/servers/12` should mean "server 12, viewed as
+Acme" — the tenant is part of what's being looked at. `/settings/teams/acme` is not that; it
+is a settings page that happens to take a team as an argument, the same way
+`/settings/profile` takes the current user as an implicit argument. Writing this down now
+matters because Servers, Sites and Clients are about to be the first real test of the
+pattern, and every one of them should copy the resource shape, not the administration shape.
+
+**Consequences**
+
+- New resources (`Server`, `Site`, `Client`, `Domain`) are routed
+  `/{current_team}/servers/…`, `/{current_team}/sites/…`, etc.
+- `/settings/teams/…` is not a precedent for tenant resources, despite taking a `{team}`
+  parameter — it is the one deliberate exception, not the pattern to copy.
+- If a future feature is genuinely ambiguous between the two, the test is: does the URL
+  describe something the tenant *has*, or something the user is *configuring about* the
+  tenant?
+
+---
+
+## ADR-021 — `app/` moves to domain folders
+
+**2026-08-17** · **Status**: **Superseded by [ADR-026](#adr-026--app-stays-type-first-with-a-domain-subfolder-inside-each-type)**
+
+> Reversed the same day, before implementation. Nothing in this entry was built. Kept for the
+> reasoning, which ADR-026 answers directly rather than ignores.
+
+**Decision** — Resolves [Q3](OPEN_QUESTIONS.md). `app/` moves from Laravel's type-first
+layout (`Http/Controllers/Teams`, `Actions/Teams`, `Models`, `Policies`, …) to domain
+folders: `app/Teams/`, `app/Sites/`, `app/Servers/`, each containing its own
+`Http/Controllers`, `Actions`, `Models`, `Policies`, etc., plus a scoped `CLAUDE.md`.
+
+**Alternatives** — Keep the Laravel-default type-first layout, matching what Boost and the
+rest of the ecosystem's tooling assume.
+
+**Why** — The team domain already spans seven type-first directories. Servers, Sites and
+Clients arriving at once, on top of that, means every one of the domain's files scattered
+across the same seven folders with nothing that represents "this is the Sites feature."
+Deciding this before the first `Site` migration is a rename; deciding it after means moving
+files that by then also have PHPStan baselines, tests and imports pointing at them.
+
+**Consequences**
+
+- New domains are created as `app/{Domain}/` from the start: `app/Sites/`, `app/Servers/`,
+  `app/Clients/`.
+- `app/Teams/` is restructured to match, moving today's `Http/Controllers/Teams`,
+  `Actions/Teams`, the `Team`/`Membership`/`TeamInvitation` models, `TeamPolicy` and related
+  rules into it. This touches import paths across the existing, tested team feature — do in
+  one dedicated change, verified by the existing Pest suite, not folded into unrelated work.
+- Framework-wide concerns that do not belong to one domain (base `Model`, shared
+  `Concerns`, Fortify actions, Inertia middleware) stay where Laravel expects them.
+- Scoped `CLAUDE.md` files live at `app/{Domain}/CLAUDE.md`, resolving the "no domain folder
+  to host one yet" gap noted in ADR-010.
+
+---
+
+## ADR-020 — Ownership can be transferred; the database enforces exactly one Owner
+
+**2026-08-17** · **Status**: Accepted, **completed by [ADR-029](#adr-029--recovering-an-abandoned-organization-is-a-manual-documented-procedure)**
+
+> This entry covers the voluntary transfer. The involuntary case — an Owner who disappears
+> without handing over — is answered by ADR-029: a documented operator procedure, deliberately
+> not a self-service takeover. Note also that ADR-028 does **not** loosen this: Owner stays out
+> of `assignable()`, and an Admin can never promote anyone to Admin or Owner.
+
+**Decision** — Resolves [Q6](OPEN_QUESTIONS.md). `TeamRole::assignable()` will include Owner
+in one context only: a dedicated "transfer ownership" action, distinct from the general
+member-role editor. The transfer is a single transaction: the current Owner becomes Admin,
+the chosen target (who must already be an Admin) becomes Owner. A database constraint
+enforces at most one Owner per team; combined with the existing `TeamPolicy` rule that blocks
+the sole Owner from leaving or being removed, this guarantees exactly one Owner always
+exists once a team has any members at all.
+
+**Alternatives** — Leave ownership untransferable, as today; allow shared/multiple Owners.
+
+**Why** — An owner who wants to step back currently has no route to do so, and an abandoned
+team has no path to a new Owner — a real operational gap once a team owns live servers and
+sites, not a theoretical one. Restricting the source pool to existing Admins (rather than any
+Member) means a transfer is always to someone who has already been trusted with the team's
+administrative permissions, not a cold handoff to an untested member.
+
+**Consequences**
+
+- The transfer action is a new, explicit endpoint — not a side effect of the existing
+  member-role update form, which still excludes Owner from its options.
+- The database constraint (partial unique index: one `owner` role per `team_id`) makes a
+  zero- or multiple-owner team unrepresentable, closing the gap `Team::owner()`'s
+  `first()` lookup was quietly relying on.
+- Transfer requires the target to already hold Admin — promoting a Member to Owner directly
+  is not supported; promote to Admin first.
+
+---
+
+## ADR-019 — Resources belong directly to their `Team`; cross-team sharing is deferred
+
+**2026-08-17** · **Status**: Accepted
+
+**Decision** — Resolves [Q5](OPEN_QUESTIONS.md) and confirms ADR-017's ownership model
+against two real competitors' designs. `Server`, `Site`, `Client` and `Domain` all carry a
+`team_id` and are owned by exactly one `Team`, visible to every member of that team — the
+same shape `Team` already has today, extended rather than replaced. Deleting a `Team` soft-
+deletes its memberships, invitations, and owned resources together, so restoring the team is
+restoring a coherent whole rather than an empty shell (closing the gap DATA_MODEL.md flagged
+in `TeamController::destroy`). Deleting an individual resource (e.g. one `Site`) is a
+separate, explicit, permission-gated hard delete, independent of team lifecycle.
+
+**Alternatives considered** — A `RunCloud`-style split, researched directly against the
+competitors named as inspiration for this product: a `Team` there is a pure visibility grant
+(which resources a member can see) fully decoupled from `Role` (what they can do), letting
+one resource be shared across multiple teams, with a default "All Access" team for solo
+users. `Ploi`, by contrast, ships the same shape this ADR adopts — servers, sites, backups
+and scripts each belong to exactly one team, filtered by "current team context" — and its own
+roadmap notes visibility/permissions "were built as something of an afterthought," with sites
+added after team setup needing manual permission attention.
+
+**Why** — The Ploi shape is what is already built and tested in this codebase
+(`current_team_id`, the team switcher, `EnsureTeamMembership`); adopting it for the hosting
+domain costs nothing new. The RunCloud shape only pays for itself once a real need exists for
+the *same* resource to be worked on by two different teams with different permissions —
+nothing in this product today creates that need, and building the grant-table and
+Account-layer machinery speculatively is exactly the premature abstraction `CLAUDE.md` warns
+against. Ploi's own admission that bolting sharing on later caused friction is a reason to
+default resources to a visible, working owner now, not a reason to build the general case
+upfront.
+
+**Consequences**
+
+- No new `Account` entity. `Team` remains both the tenancy boundary (ADR-007) and the
+  resource owner.
+- `Client` (ADR-017) is owned by `Team`, not by any higher entity — consistent with `Team`
+  owning every other resource.
+- If real usage later proves a resource needs multi-team visibility, the traceable path is
+  additive: a `team_resource` grant table recording *additional* teams with access, with
+  `team_id` remaining the resource's "home" team. This does not require revisiting this ADR's
+  core model, only extending it.
+- `TeamController::destroy` must be changed to soft-delete memberships, invitations, and (once
+  they exist) owned resources in the same operation as the team, rather than hard-deleting
+  memberships first as it does today.
+
+---
+
 ## ADR-018 — The hosted resource is called `Site`, with a `type` and optional child services
 
 **2026-08-17** · **Status**: Accepted
@@ -68,7 +671,13 @@ rows that don't match how the customer thinks about "the app".
 
 ## ADR-017 — Clients are a grouping entity inside a Team, not a second tenancy level
 
-**2026-08-17** · **Status**: Accepted
+**2026-08-17** · **Status**: Accepted, **partially reversed by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed)**
+
+> Two changes. `Team` is renamed to `Organization` throughout this entry. And the free-form
+> naming guidance — an agency creating several teams named by function, `Front-end`,
+> `Back-end`, `QA` — is **withdrawn**: it cannot work alongside ADR-019, which gives each
+> resource exactly one owning tenant. Everything this ADR decides about `Client` stands
+> unchanged.
 
 **Decision** — `Team` remains the sole tenancy boundary and stays free-form: an agency
 creates as many Teams as it wants, named however it likes (functional groupings such as
@@ -112,7 +721,13 @@ and leaves ADR-005 (permissions) and ADR-007 (team-scoped URLs) completely untou
 
 ## ADR-016 — Top navigation for areas, contextual navigation for resources
 
-**2026-08-15** · **Status**: Accepted
+**2026-08-15** · **Status**: Accepted, **amended by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed)**
+
+> One substantive amendment: organization administration moves inside the tenant prefix, so
+> the last bullet about team administration living at `/settings/teams/…` no longer holds —
+> only the list-and-create page stays outside. The switcher in row one is confirmed rather
+> than changed: multi-organization membership is now an endorsed scenario. All "team"
+> language below reads as "organization"; that part is editorial.
 
 **Decision** — The application shell is a persistent two-row top navigation, not a global
 sidebar:
@@ -452,7 +1067,13 @@ invited email means cancelling and re-inviting.
 
 ## ADR-008 — Team names are validated against reserved route prefixes
 
-**Reconstructed** · **Status**: Accepted
+**Reconstructed** · **Status**: **Retired by [ADR-027](#adr-027--the-tenant-url-identifier-is-a-random-immutable-public-id)**
+
+> The premise is gone, not the reasoning. This rule was load-bearing *because* the first URL
+> segment was derived from the organization's name. Under ADR-027 that segment is a random
+> twelve-character token, which cannot collide with any route literal, so organization names no
+> longer need a reserved-word list at all. `OrganizationName` keeps ordinary validation.
+> Do not reintroduce the list without first reintroducing name-derived identifiers.
 
 **Decision** — `App\Rules\TeamName` rejects any name whose slug collides with an existing
 first-segment route prefix, plus a static list of reserved words (`admin`, `api`, `billing`,
@@ -475,7 +1096,14 @@ Adding a new top-level route means checking that no existing team already holds 
 
 ## ADR-007 — Tenancy is scoped by team slug in the URL prefix
 
-**Reconstructed** · **Status**: Accepted
+**Reconstructed** · **Status**: Accepted, **amended by [ADR-027](#adr-027--the-tenant-url-identifier-is-a-random-immutable-public-id)**
+
+> The prefix stays; what sits in it changes. The identifier is a random `public_id`, not a
+> name-derived slug, so the readability argument below no longer holds — that cost is stated and
+> accepted in ADR-027. The property this entry actually depends on, that one URL resolves to
+> exactly one tenant so a shared link never opens someone else's data, is untouched.
+> The closing note about `/settings/teams/{team}` being an inconsistency to resolve is answered
+> by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed).
 
 **Decision** — Tenant-scoped routes carry the team slug as their first path segment
 (`/{current_team}/dashboard`), guarded by `EnsureTeamMembership`, with `SetTeamUrlDefaults`
@@ -501,7 +1129,13 @@ before the pattern is copied further.
 
 ## ADR-006 — Slug uniqueness includes soft-deleted teams
 
-**Reconstructed** · **Status**: Accepted
+**Reconstructed** · **Status**: Accepted, **generation superseded by [ADR-027](#adr-027--the-tenant-url-identifier-is-a-random-immutable-public-id)**
+
+> The core rule stands and is why ADR-027 keeps `withTrashed()` in the uniqueness check: a
+> retired identifier is never reissued, so a stale bookmark can never resolve to a different
+> tenant. What changes is what the identifier *is* — a random `public_id` rather than a slug
+> derived from the name. The "occasional ugly `acme-2`" this entry accepted as the price no
+> longer occurs, and neither does the silent link breakage that renaming caused.
 
 **Decision** — `GeneratesUniqueTeamSlugs` checks `withTrashed()`. A deleted team's slug is
 retired permanently; a later team with the same name gets a numeric suffix.
@@ -521,7 +1155,12 @@ delete or purge must keep the slug reserved, or reintroduce this hole.
 
 ## ADR-005 — Permissions are an enum, decoupled from roles
 
-**Reconstructed** · **Status**: Accepted
+**Reconstructed** · **Status**: Accepted, **amended by [ADR-028](#adr-028--admins-manage-members-below-their-own-role)**
+
+> The mechanism is unchanged — authorisation still asks for a permission, never a role name.
+> The map changes: Admin gains `member:add`, `member:update` and `member:remove`, bounded to
+> roles ranking below their own. `TeamRole::assignable()` still excludes Owner, so ADR-020's
+> transfer flow remains the only route to ownership. See ADR-028 for the revised table.
 
 **Decision** — `TeamPermission` enumerates capabilities; `TeamRole::permissions()` maps each
 role to a set of them. All authorisation asks for a permission, never for a role name.
@@ -545,7 +1184,12 @@ cannot happen through the member-role UI.
 
 ## ADR-004 — Every user gets a personal team at registration
 
-**Reconstructed** · **Status**: Accepted
+**Reconstructed** · **Status**: **Superseded by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed)**
+
+> The invariant survives — every authenticated user always has at least one tenant — but
+> `is_personal` and the personal-team concept do not. ADR-025 achieves the same guarantee by
+> blocking a user from leaving their last organization, and creating one if their last
+> membership disappears involuntarily.
 
 **Decision** — `CreateNewUser` creates a personal team (`is_personal = true`) inside the
 registration transaction. Personal teams cannot be deleted or left.
@@ -567,7 +1211,14 @@ see [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 ## ADR-003 — The current team is stored on the user record
 
-**Reconstructed** · **Status**: Accepted
+**Reconstructed** · **Status**: Accepted, **amended by [ADR-025](#adr-025--team-becomes-organization-the-personal-team-is-removed)**
+
+> The column stays on the user row and keeps its rationale; it is renamed
+> `current_organization_id`. What changes is the last consequence below: visiting an
+> organization-prefixed URL no longer performs an implicit switch. The URL scopes that request
+> only, and the stored value changes on an explicit switch or on landing at `/`. Following a
+> shared link therefore no longer repoints the reader's other tabs, and the "not
+> idempotent-safe for prefetching" caveat falls away.
 
 **Decision** — `users.current_team_id`, a nullable FK with `nullOnDelete`, rather than a
 session value.
