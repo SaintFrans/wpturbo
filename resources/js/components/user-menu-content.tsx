@@ -71,12 +71,12 @@ export function UserMenuContent({ user }: Props) {
              * Header, the one menu slot that accepts arbitrary content — plain elements would
              * break React Aria's menu collection.
              */}
-            <DropdownMenuLabel className="font-thin justify-between relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1 text-sm text-foreground outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4">
+            <DropdownMenuLabel className="relative flex cursor-default items-center justify-between gap-2 rounded-sm px-2 py-1 text-sm font-thin text-foreground outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4">
                 <div className="flex items-center gap-4">
                     <SwatchBook />
                     Theme
                 </div>
-                    <div className="flex h-6.5 gap-x-1 rounded-sm bg-muted p-0.5 shadow-inner">
+                <div className="flex h-6.5 gap-x-1 rounded-sm bg-muted p-0.5 shadow-inner">
                     {themes.map(({ value, icon: Icon, label }) => (
                         <button
                             key={value}

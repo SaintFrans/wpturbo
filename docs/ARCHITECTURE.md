@@ -1,26 +1,15 @@
 # Architecture
 
-_Last verified against the codebase: 2026-08-15._
+_Last verified against the codebase: 2026-08-18._
 
 This document separates **what is built** from **what is intended**. Every section labels
 which it is. Intended architecture is written down so decisions are not re-litigated, not
 because it exists.
 
-> **Partly stale — read this first.** On 2026-08-17 the tenancy boundary was renamed from `Team`
-> to `Organization` ([ADR-025](DECISIONS.md)), `app/` was laid out per
-> [ADR-026](DECISIONS.md), and the URL identifier became a `handle` — seeded from the name once,
-> then editable on its own ([ADR-030](DECISIONS.md), which superseded ADR-027's random
-> `public_id`). **Sections 2 to 5 below still use the old `Team` vocabulary and have not been
-> rewritten yet.** Read every "team" as "organization" and every "slug" as `handle`.
->
-> Tenant routes now sit behind a literal `org/` segment ([ADR-031](DECISIONS.md)); `/settings/…`
-> is exclusively personal and is presented as "Account", while the organization's own settings are
-> an area in the header's second row with General and Members sections.
->
-> Still unimplemented: removing `is_personal` and the implicit organization switch (both
-> ADR-025), [ADR-028](DECISIONS.md) on Admin member management, and
-> [ADR-029](DECISIONS.md) on owner recovery. Status per phase is in
-> [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §1.
+Three accepted decisions are **not** implemented, and each is flagged where it applies below:
+removing `is_personal` and the implicit organization switch (both [ADR-025](DECISIONS.md)), and
+Admin member management ([ADR-028](DECISIONS.md)). Status per phase is in
+[ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §1.
 
 ## 1. System overview
 
@@ -29,7 +18,7 @@ because it exists.
 │  Control plane  (BUILT — auth & tenancy only)    │
 │  Laravel 13 · Inertia v3 · React 19 · TypeScript │
 │                                                  │
-│  Users → Teams → (Servers → Sites)               │
+│  Users → Organizations → (Servers → Sites)       │
 │                   ^^^^^^^^^^^^^^^ not built      │
 └────────────────────┬─────────────────────────────┘
                      │  NATS JetStream  (INTENDED — no code, no dependency)
@@ -58,7 +47,7 @@ controllers, and Wayfinder generates typed TypeScript callers for those controll
 | Route typing     | Laravel Wayfinder → `resources/js/actions/` and `resources/js/routes/`                   |
 | Auth             | Laravel Fortify + `@laravel/passkeys`                                                    |
 | Build            | Vite+ (`vp`) 0.2.9 over Vite, pnpm 11, Node 24                                           |
-| Tests            | Pest 4 (93 tests, backend only; ADR-024 adds scoped browser coverage, not yet built)     |
+| Tests            | Pest 4 (105 tests, backend only; ADR-024 adds scoped browser coverage, not yet built)    |
 | Static analysis  | Larastan / PHPStan (`phpstan.neon`), Oxlint type-aware linting                           |
 | Formatting       | Pint (PHP), Oxfmt (TS/React; ignore list in `fmt.ignorePatterns`)                        |
 
@@ -109,138 +98,127 @@ in doubt about which you want, check `package.json`.
 
 ### Code organisation
 
-`app/` is organised **by Laravel type, not by domain**:
+`app/` is organised **by Laravel type, with a subfolder per domain inside each type**
+([ADR-026](DECISIONS.md), which reversed ADR-021's domain-first plan):
 
 ```
 app/
-  Actions/       Fortify/  Teams/        single-purpose operations
-  Concerns/      HasTeams, validation-rule traits
-  Data/          readonly DTOs passed to Inertia (TeamPermissions, UserTeam)
-  Enums/         TeamRole, TeamPermission
+  Actions/          Fortify/  Organizations/     single-purpose operations
+  Concerns/         Organizations/ (HasOrganizations, GeneratesHandle) + validation-rule traits
+  Data/             Organizations/ (UserOrganization, OrganizationPermissions)
+  Enums/            Organizations/ (OrganizationRole, OrganizationPermission)
   Http/
-    Controllers/ Settings/  Teams/
-    Middleware/  EnsureTeamMembership, SetTeamUrlDefaults, HandleInertiaRequests
-    Requests/    form requests carrying validation and authorisation
-    Responses/   Fortify response overrides (post-login redirect targets)
-  Models/        Team, Membership, TeamInvitation, User
-  Notifications/ Teams/
-  Policies/      TeamPolicy
-  Rules/         TeamName, UniqueTeamInvitation, ValidTeamInvitation
-```
-
-There are no `app/Jobs`, `app/Services`, or `app/Events` directories. Nothing is queued
-anywhere in the application, despite `QUEUE_CONNECTION=database` being configured.
-
-**This is now the actual layout** ([ADR-026](DECISIONS.md), which reversed ADR-021's domain-first
-plan). The tree above is the pre-rename state; today every domain-owned file sits in a subfolder
-of its type folder:
-
-```
-app/
-  Actions/Organizations/        CreateOrganization
-  Concerns/Organizations/       HasOrganizations, GeneratesHandle
-  Data/Organizations/           UserOrganization, OrganizationPermissions
-  Enums/Organizations/          OrganizationRole, OrganizationPermission
-  Http/Controllers/Organizations/
-  Http/Requests/Organizations/
-  Models/Organizations/         Organization, Membership, OrganizationInvitation
-  Notifications/Organizations/
-  Policies/Organizations/       OrganizationPolicy
-  Rules/Organizations/          UniqueOrganizationInvitation, ValidOrganizationInvitation
+    Controllers/    Settings/  Organizations/
+    Middleware/     EnsureOrganizationMembership, SetOrganizationUrlDefaults, HandleInertiaRequests
+    Requests/       Settings/  Organizations/
+    Responses/      Fortify response overrides (post-login redirect targets)
+  Models/           User + Organizations/ (Organization, Membership, OrganizationInvitation)
+  Notifications/    Organizations/
+  Policies/         Organizations/ (OrganizationPolicy)
+  Rules/            Organizations/ (OrganizationHandle, UniqueOrganizationInvitation, ValidOrganizationInvitation)
 ```
 
 `User`, `Providers`, `Console`, the Fortify actions, Inertia middleware and shared
-validation-rule traits stay flat — they belong to no domain. Factories follow the model
-namespace, so they live in `database/factories/Organizations/`.
+validation-rule traits stay flat — they belong to no domain. Factories follow the model namespace,
+so `Organization`'s lives in `database/factories/Organizations/`; getting that wrong is invisible
+to `tsc`, Pint and Pest, and surfaces only when a factory cannot be resolved.
+
+**Add the domain subfolder from the first file of a new domain**, even when it is the only one.
+`Servers`, `Sites` and `Clients` are close behind, and the alternative is moving the same files
+twice.
+
+There are no `app/Jobs`, `app/Services`, or `app/Events` directories. Nothing is queued anywhere in
+the application, despite `QUEUE_CONNECTION=database` being configured.
 
 ### Frontend structure
 
 ```
 resources/js/
-  pages/        Inertia page components (auth/, settings/, teams/, dashboard, welcome)
-  layouts/      app/ (header nav — ADR-016), auth/, settings/ shells
-  components/   feature components (modals, team-switcher, section-nav) + ui/ (shadcn primitives)
+  pages/        Inertia page components (auth/, settings/, organizations/settings/, dashboard, welcome)
+  layouts/      app/ (header nav — ADR-016), auth/, settings/ (Account), organizations/ (Settings area)
+  components/   feature components (modals, organization-switcher, section-nav) + ui/ (shadcn primitives)
   hooks/        appearance, clipboard, two-factor, mobile detection
-  types/        shared TS types, incl. teams.ts mirroring the PHP DTOs
+  types/        shared TS types, incl. organizations.ts mirroring the PHP DTOs
   actions/      GENERATED by Wayfinder — never edit by hand
   routes/       GENERATED by Wayfinder — never edit by hand
 ```
 
-`resources/js/types/teams.ts` is hand-maintained and mirrors `app/Data/UserTeam.php` and
-`app/Data/TeamPermissions.php`. The two sides are **not** generated from a single source,
-so they drift silently. Changing a DTO means changing the TypeScript type in the same
-commit.
+Layouts are resolved centrally in `app.tsx` by page name, so a page does not import its own shell.
+`organizations/settings/*` gets the Settings area shell; `settings/*` gets the Account shell.
+
+`resources/js/types/organizations.ts` is hand-maintained and mirrors
+`app/Data/Organizations/UserOrganization.php` and `OrganizationPermissions.php`. The two sides are
+**not** generated from a single source, so they drift silently. Changing a DTO means changing the
+TypeScript type in the same commit.
+
+**Regenerating Wayfinder by hand needs `--with-form`.** `vite.config.ts` sets
+`formVariants: true`, so `php artisan wayfinder:generate` without that flag silently drops every
+`.form` helper and breaks unrelated pages.
 
 ## 3. Tenancy model (BUILT)
 
-Tenancy is **URL-prefix scoped by organization handle**, enforced by middleware.
-
-> Since [ADR-031](DECISIONS.md) the shape is `/org/{organization}/…`. The literal `org/` segment is
-> what allowed ADR-008's reserved-word list to be deleted: a handle can no longer shadow an
-> application route. `/settings/…` is now exclusively personal.
+Tenancy is **URL-prefix scoped by organization handle**, enforced by middleware. Since
+[ADR-031](DECISIONS.md) the shape is `/org/{organization}/…`.
 
 ### How a request is scoped
 
 ```
-GET /acme-agency/dashboard
-     └──────┬──────┘
-        {current_team} route parameter
+GET /org/acme-agency/dashboard
+         └────┬────┘
+        {organization} route parameter
                 │
                 ▼
-   EnsureTeamMembership middleware
-     1. resolve the team from the {current_team} or {team} route parameter
+   EnsureOrganizationMembership middleware
+     1. resolve the organization from the {organization} route parameter
      2. abort 403 unless the authenticated user is a member of it
-     3. optionally enforce a minimum role (middleware parameter)
-     4. if the URL team differs from the user's current team, switch to it
+     3. optionally enforce a minimum role (middleware parameter, unused today)
+     4. if it differs from the user's current organization, switch to it
 ```
 
-`SetTeamUrlDefaults` runs on every web request and pushes the current team's slug into
-`URL::defaults()`, so `route('dashboard')` resolves without passing the team explicitly.
+The 403 in step 2 covers three cases — no user, no such organization, and not a member — and they
+are **deliberately indistinguishable**. That is what stops the URL being probed to discover which
+agencies are customers, and it is why a readable handle costs nothing in privacy terms.
 
-### The two route shapes
+`SetOrganizationUrlDefaults` runs on every web request and pushes the current organization's
+handle into `URL::defaults()`, so `route('dashboard')` resolves without passing it explicitly.
+Two other places set the same default and must stay in step: `RedirectsToCurrentOrganization` and
+`HasOrganizations::switchOrganization()`. There is exactly one parameter name, `organization`.
 
-There are currently **two different scoping conventions in use**, and it matters:
+**Step 4 is scheduled for removal** ([ADR-025](DECISIONS.md), phase 3). A read currently performs
+a write: following a colleague's link to another organization silently repoints your current
+organization in every other tab. Since phase 4 put organization _settings_ behind the same prefix,
+this now fires on more routes than it used to.
 
-| Shape         | Example                     | Parameter      | Where                 |
-| ------------- | --------------------------- | -------------- | --------------------- |
-| Team-prefixed | `/{current_team}/dashboard` | `current_team` | `routes/web.php`      |
-| Team-suffixed | `/settings/teams/{team}`    | `team`         | `routes/settings.php` |
+### The route shape
 
-Only the prefixed form triggers the automatic team switch. Only **one** route uses the
-prefixed form today: the dashboard. Every future tenant-scoped resource — servers, sites —
-should use the prefixed form, so the URL always states which tenant the user is looking at.
+One shape, applied without exception:
 
-**This split is being removed.** [ADR-025](DECISIONS.md) collapses it: organization
-administration moves inside the prefix at `/{current_organization}/settings/…`, `/settings/…`
-becomes purely personal, and only the organization list-and-create page stays outside. The
-automatic switch is removed at the same time — the URL will scope the request without
-persisting the user's current organization. See
-[ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §5 and §6.
+| Scope         | Example                                                                     |
+| ------------- | --------------------------------------------------------------------------- |
+| Tenant-scoped | `/org/{organization}/dashboard`, `/org/{organization}/settings`             |
+| Personal      | `/settings/profile`, `/settings/security`                                   |
+| Neither       | `/org` (redirects into your own organization), `/invitations/{code}/accept` |
 
-### Team name collisions with route prefixes
+Every future tenant resource — servers, sites, clients — goes under `/org/{organization}/…`, inside
+the `EnsureOrganizationMembership` group. Registering a tenant route outside that group is the one
+way to lose tenant isolation.
 
-Because team slugs occupy the first URL segment, a team named "settings" would shadow the
-settings routes. `App\Rules\TeamName` blocks this by rejecting any name that slugs to an
-existing route prefix, plus a long static list of reserved words (`admin`, `api`, `billing`,
-HTTP status codes, and so on). This rule is load-bearing: it must keep running on both
-create and rename.
+`/invitations/…` is the deliberate exception: the recipient is not a member yet, so the route
+cannot carry an organization prefix.
 
-Slugs are generated from the name and regenerated on rename, with a numeric suffix for
-collisions. `withTrashed()` is included in the uniqueness check, so a soft-deleted team's
-slug is never reissued.
+### Why the handle cannot collide with a route
 
-**This subsection is rewritten by [ADR-030](DECISIONS.md), implemented 2026-08-17.** The first URL
-segment is a `handle`, seeded from the name at creation and never regenerated on rename. It can be
-changed through its own field, which is an explicit action that does break existing links — unlike
-the old behaviour, where renaming broke them silently.
+Because the literal `org/` segment separates them. That is the whole point of
+[ADR-031](DECISIONS.md): before it, a handle occupied the first URL segment and an organization
+called "Settings" would have shadowed the application's own routes, which is why a reserved-word
+list existed and had to keep running on both create and rename. With the prefix, that condition
+cannot arise, the list is deleted rather than maintained, and `/org/settings/dashboard` is an
+ordinary URL.
 
-`App\Rules\Organizations\OrganizationHandle` carries the reserved-word list, so ADR-008 is back
-in a better form: it guards the handle rather than the name, and an organization may legitimately
-be called "Settings".
-
-ADR-006's rule survives in `GeneratesHandle` and now spans three sources — the live column,
-soft-deleted rows, and `organization_handles`, which records every handle ever held. That last one
-is what stops a changed handle being claimed by another tenant.
+`App\Rules\Organizations\OrganizationHandle` still validates shape and availability. Handles are
+seeded from the name at creation, never regenerated on rename, and never reissued — uniqueness
+spans the live column, soft-deleted rows and `organization_handles` ([ADR-030](DECISIONS.md),
+[ADR-006](DECISIONS.md)). See [DATA_MODEL.md](DATA_MODEL.md) for the reasoning.
 
 ## 4. Authentication (BUILT)
 
@@ -260,17 +238,17 @@ Rate limiters, defined in `FortifyServiceProvider`:
 | password update | 6/min  | route middleware `throttle:6,1`    |
 
 Fortify response classes are overridden in `app/Http/Responses/` so that after login,
-registration, 2FA challenge or email verification, the user lands on their current team's
-prefixed dashboard rather than a bare `/dashboard`.
+registration, 2FA challenge or email verification, the user lands on their current organization's
+prefixed dashboard (`/org/{handle}/dashboard`) rather than a bare `/dashboard`.
 
-Registration creates a personal team for the new user in the same database transaction
-(`CreateNewUser` → `CreateTeam`), so a user is never left without a tenant.
+Registration creates an organization for the new user in the same database transaction
+(`CreateNewUser` → `CreateOrganization`), named after the user with no suffix, so a user is never
+left without a tenant. No organization-name field is added to the registration form — not everyone
+signing up is a company.
 
-[ADR-025](DECISIONS.md) keeps that invariant but removes `is_personal`: the organization
-created at registration is a normal one, named after the user and renameable. The guarantee is
-enforced instead by blocking a user from leaving their last organization, and creating one if
-their last membership is removed by someone else. No organization-name field is added to the
-registration form — not everyone signing up is a company.
+That organization is still flagged `is_personal`, and [ADR-025](DECISIONS.md) removes the flag
+while keeping the invariant: a user cannot leave or delete their last organization, and gets a new
+one if their last membership is removed by someone else. Phase 2, not yet implemented.
 
 Password policy tightens in production only (`AppServiceProvider::configureDefaults`):
 12 characters, mixed case, numbers, symbols, and a check against known breach corpora. In
@@ -287,7 +265,7 @@ Browser ──Inertia visit──▶ Controller ──▶ Model / Action ──�
 ```
 
 The one scheduled task is in `routes/console.php`: a daily closure that deletes expired
-team invitations.
+organization invitations.
 
 The one outbound side effect is the invitation email, sent **inline during the HTTP
 request** via `Notification::route('mail', …)`. It is not queued, so a slow or failing mail
@@ -354,11 +332,11 @@ change" rule in `CLAUDE.md` have actual history to attach to.
 
 ## 8. Constraints that shape future work
 
-1. **Tenant isolation is a hard boundary.** Every query touching a tenant-owned resource
-   must be scoped through the team, not filtered after loading. See
+1. **Tenant isolation is a hard boundary.** Every query touching a tenant-owned resource must be
+   scoped through the organization relationship, not filtered after loading. See
    [SECURITY.md](SECURITY.md).
-2. **The team slug is in the URL.** Any new tenant resource route belongs under the
-   `/{current_team}/…` prefix.
+2. **The organization handle is in the URL.** Any new tenant resource route belongs under the
+   `/org/{organization}/…` prefix, inside the `EnsureOrganizationMembership` group.
 3. **Wayfinder output is generated.** Never hand-edit `resources/js/actions/` or
    `resources/js/routes/`; change the route or controller and regenerate.
 4. **PHP DTOs and TypeScript types are manually paired.** Change both together.

@@ -1,270 +1,286 @@
 # Data model
 
-_Last verified against the migrations and models: 2026-08-15._
+_Last verified against the migrations and models: 2026-08-18._
 
-> **Renamed on 2026-08-17 — the names below are stale.** The tables are now `organizations`,
-> `organization_members` and `organization_invitations`; the foreign key is `organization_id`;
-> the user column is `users.current_organization_id`; and `teams.slug` is now
-> `organizations.handle`, seeded from the name and separately editable
-> ([ADR-025](DECISIONS.md), [ADR-030](DECISIONS.md)). `Membership` keeps its name. Classes moved
-> into domain subfolders per [ADR-026](DECISIONS.md) — `App\Models\Organizations\Organization`
-> and so on. **The prose and diagrams below have not been rewritten yet; read every "team" as
-> "organization".**
->
-> Two things below are still literally true of the code and are not oversights:
-> `organizations.is_personal` still exists (phase 2), and the permission table is unchanged —
-> [ADR-028](DECISIONS.md)'s Admin member management is phase 6. Status per phase in
-> [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §1.
+Five tables carry the domain today: `users`, `organizations`, `organization_handles`,
+`organization_members`, `organization_invitations`. Everything else in the database is framework
+scaffolding (cache, jobs, sessions, passkeys, password reset tokens).
 
-Four tables carry the domain today: `users`, `teams`, `team_members`, `team_invitations`.
-Everything else in the database is framework scaffolding (cache, jobs, sessions, passkeys,
-password reset tokens).
-
-There is **no** entity for servers, sites, agents, deployments or billing. The hosting
-domain is unmodelled.
+There is **no** entity for servers, sites, agents, deployments or billing. The hosting domain is
+unmodelled.
 
 ## Entity map
 
 ```
-        ┌───────────┐                        ┌───────────┐
-        │   User    │                        │   Team    │
-        ├───────────┤                        ├───────────┤
-        │ id        │                        │ id        │
-        │ name      │◀───┐              ┌───▶│ name      │
-        │ email     │    │              │    │ slug ◀────┼── unique, appears in the URL
-        │ password  │    │              │    │is_personal│
-        │ 2FA cols  │    │              │    │ deleted_at│
-        │current_team_id ┼──────────────┘    └───────────┘
-        └───────────┘    │                        ▲
-              ▲          │  ┌──────────────┐      │
-              │          └──┤  Membership  ├──────┘
-              └─────────────┤ team_members │
-                            ├──────────────┤
-                            │ team_id      │
-                            │ user_id      │  UNIQUE(team_id, user_id)
-                            │ role         │  owner | admin | member
-                            └──────────────┘
+     ┌──────────────────────┐              ┌────────────────────────┐
+     │        User          │              │     Organization       │
+     ├──────────────────────┤              ├────────────────────────┤
+     │ id                   │              │ id                     │
+     │ name                 │◀───┐    ┌───▶│ name                   │
+     │ email                │    │    │    │ handle ◀───────────────┼── unique, in the URL
+     │ password             │    │    │    │ is_personal            │
+     │ 2FA columns          │    │    │    │ deleted_at             │
+     │ current_organization_id ──┼────┘    └────────────────────────┘
+     └──────────────────────┘    │                 ▲       ▲
+              ▲                  │                 │       │
+              │   ┌──────────────────────┐         │       │  ┌──────────────────────┐
+              └───┤      Membership      ├─────────┘       └──┤ organization_handles │
+                  │ organization_members │                    ├──────────────────────┤
+                  ├──────────────────────┤                    │ handle  (unique)     │
+                  │ organization_id      │                    │ organization_id      │
+                  │ user_id              │                    └──────────────────────┘
+                  │ role                 │  UNIQUE(organization_id, user_id)
+                  └──────────────────────┘  owner | admin | member
 
-                            ┌──────────────────┐
-                            │ TeamInvitation   │
-                            ├──────────────────┤
-       Team ◀───────────────┤ team_id          │
-       User ◀───────────────┤ invited_by       │
-                            │ code   (unique)  │ ← the route key
-                            │ email            │
-                            │ role             │
-                            │ expires_at       │
-                            │ accepted_at      │
-                            └──────────────────┘
+                          ┌──────────────────────────┐
+                          │ OrganizationInvitation   │
+                          ├──────────────────────────┤
+        Organization ◀────┤ organization_id          │
+        User         ◀────┤ invited_by               │
+                          │ code   (unique)          │ ← the route key
+                          │ email                    │
+                          │ role                     │
+                          │ expires_at               │
+                          │ accepted_at              │
+                          └──────────────────────────┘
 ```
 
 ## Entities
 
 ### User
 
-`users`, extended by the `HasTeams` concern.
+`users`, extended by the `HasOrganizations` concern
+(`App\Concerns\Organizations\HasOrganizations`).
 
-| Column                                                                      | Notes                                  |
-| --------------------------------------------------------------------------- | -------------------------------------- |
-| `name`, `email`, `password`                                                 | `password` is cast `hashed`            |
-| `email_verified_at`                                                         | Fortify email verification             |
-| `two_factor_secret`, `two_factor_recovery_codes`, `two_factor_confirmed_at` | Fortify 2FA                            |
-| `current_team_id`                                                           | FK → `teams`, nullable, `nullOnDelete` |
+| Column                                                                      | Notes                                          |
+| --------------------------------------------------------------------------- | ---------------------------------------------- |
+| `name`, `email`, `password`                                                 | `password` is cast `hashed`                    |
+| `email_verified_at`                                                         | Fortify email verification                     |
+| `two_factor_secret`, `two_factor_recovery_codes`, `two_factor_confirmed_at` | Fortify 2FA                                    |
+| `current_organization_id`                                                   | FK → `organizations`, nullable, `nullOnDelete` |
 
-`password`, `two_factor_secret`, `two_factor_recovery_codes` and `remember_token` are
-marked `#[Hidden]`, which matters because `HandleInertiaRequests` shares the whole user
-model as a page prop on every request.
+`password`, `two_factor_secret`, `two_factor_recovery_codes` and `remember_token` are marked
+`#[Hidden]`, which matters because `HandleInertiaRequests` shares the whole user model as a page
+prop on every request.
 
-**Why `current_team_id` lives on the user, not in the session.** Team context survives
-logout, device changes and email links. A user following an invitation link from their
-phone lands in the right tenant. The cost is a write on every team switch; that is
-acceptable at the frequency team switching actually happens.
+`User` stays flat in `app/Models/` — it belongs to no domain ([ADR-026](DECISIONS.md)).
 
-### Team
+**Why `current_organization_id` lives on the user, not in the session.** Organization context
+survives logout, device changes and email links. A user following an invitation link from their
+phone lands in the right tenant. The cost is a write on every switch; that is acceptable at the
+frequency switching actually happens.
 
-`teams`. Soft-deleted. Route key is `slug`, not `id`.
+**Visiting a prefixed URL currently writes this column** — `EnsureOrganizationMembership` switches
+the user's current organization on every tenant route. [ADR-025](DECISIONS.md) removes that: the
+URL should scope the request without persisting anything, so following a shared link stops
+repointing the reader's other tabs. Not yet implemented — phase 3 of
+[ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md).
 
-| Column        | Notes                                                      |
-| ------------- | ---------------------------------------------------------- |
-| `name`        | Validated by `App\Rules\TeamName`                          |
-| `slug`        | **Unique.** Generated from the name, regenerated on rename |
-| `is_personal` | Marks the team created automatically at registration       |
-| `deleted_at`  | Soft delete                                                |
+### Organization
 
-**Why the slug is the route key.** The slug is the tenant identifier in the URL
-(`/acme-agency/dashboard`). Exposing sequential integer IDs in tenant URLs would leak how
-many customers exist and invite enumeration. The slug also makes the URL readable, which
-matters when agency staff share links internally.
+`organizations`. Soft-deleted. Route key is `handle`, not `id`.
 
-**Replaced by [ADR-030](DECISIONS.md), implemented 2026-08-17.** `slug` is now `handle`. It is
-seeded from the name once at creation (`Str::slug`, numeric suffix on collision), never touched by
-a rename, and editable through its own field on the settings screen.
+| Column        | Notes                                                                   |
+| ------------- | ----------------------------------------------------------------------- |
+| `name`        | Free text. Required, max 255 — no reserved-word check                   |
+| `handle`      | **Unique.** Seeded from the name at creation, never changed by a rename |
+| `is_personal` | Marks the organization created automatically at registration            |
+| `deleted_at`  | Soft delete                                                             |
 
-The readability argument above therefore still stands. ADR-027 briefly replaced the slug with a
-random token on the grounds that a readable identifier let an attacker probe `/some-agency/` for
-customers — that argument was wrong, because `EnsureOrganizationMembership` returns one
-indistinguishable 403 whether or not the organization exists.
+**Why the handle is the route key.** It is the tenant identifier in the URL
+(`/org/acme-agency/dashboard`). Exposing sequential integer IDs would leak how many customers
+exist and invite enumeration. The handle also keeps the URL readable, which matters when agency
+staff share links internally.
 
-What that change did fix, and what ADR-030 keeps, is the coupling: `Organization::booted()`
-regenerated the slug on **rename**, silently breaking every existing link.
+**Why the name is not validated against reserved words.** It used to be, because the slug derived
+from it occupied the first URL segment. Since [ADR-031](DECISIONS.md) every tenant route sits
+behind a literal `org/` segment, so a handle cannot shadow an application route and a name cannot
+shadow anything at all. An organization may legitimately be called "Settings". Only the handle is
+validated, by `App\Rules\Organizations\OrganizationHandle`, and only for shape and availability.
 
-A third table, `organization_handles`, records every handle a tenant has ever held. Uniqueness is
-checked against it as well as against the live column and soft-deleted rows, so changing a handle
-does not release the old one for another tenant to claim. The generator lives in
-`App\Concerns\Organizations\GeneratesHandle`.
+**Why renaming never changes the handle.** `Organization::booted()` seeds the handle in `creating`
+and has no `updating` counterpart. Before [ADR-030](DECISIONS.md) the slug was regenerated on
+rename, which silently invalidated every bookmark, shared link and mail archive the moment someone
+renamed their organization. Changing the handle is now a separate, explicit action on the General
+settings tab, warned about in the UI.
 
-**Why slug uniqueness includes soft-deleted teams.** `GeneratesUniqueTeamSlugs` queries
-`withTrashed()`. If a deleted team's slug were reissued, links and bookmarks pointing at
-the old tenant would silently resolve to a _different_ tenant's data. That is a
-cross-tenant leak, so the slug is permanently retired.
+**Why a handle is never reissued.** `GeneratesHandle` checks three sources: the live column,
+soft-deleted rows, and `organization_handles`. If a retired handle were reissued, links and
+bookmarks pointing at the old tenant would silently resolve to a _different_ tenant's data — a
+cross-tenant leak triggered by nothing more than a stale bookmark ([ADR-006](DECISIONS.md)).
 
-**Why every user gets a personal team.** `CreateNewUser` creates one inside the
-registration transaction. A user is therefore never in a state of having no tenant, which
-removes an entire class of null-team edge cases from every downstream feature. Personal
-teams cannot be deleted or left (`TeamPolicy::delete`, `TeamPolicy::leave`), so a user
-always retains a fallback tenant.
+**Why every user gets an organization at registration.** `CreateNewUser` creates one inside the
+registration transaction, named after the user. A user is therefore never in a state of having no
+tenant, which removes an entire class of null-tenant edge cases from every downstream feature.
 
-**Superseded by [ADR-025](DECISIONS.md), not yet implemented.** The invariant is kept; the
-mechanism changes. `is_personal` is dropped, and the guarantee is enforced by two rules
-instead: a user cannot leave or delete their last organization (the voluntary case), and a
-user whose last membership is removed by an owner gets a new organization created for them
-(the involuntary case, which cannot be blocked). The consequence for downstream code is
-unchanged — a current organization always resolves for an authenticated user.
+**`is_personal` is on its way out.** [ADR-025](DECISIONS.md) keeps the invariant and drops the
+flag: a user cannot leave or delete their **last** organization (the voluntary case), and a user
+whose last membership is removed by an owner gets a new organization created for them (the
+involuntary case, which cannot be blocked). Until phase 2 lands, two `OrganizationPolicy`
+conditions still key on `is_personal`, and each guards **two** things at once — the personal
+organization _and_ the sole owner. Replacing them means replacing both, not deleting the clause.
 
-**Known asymmetry, resolved but not yet implemented.** `Team` uses `SoftDeletes`, but
-`TeamController::destroy` hard-deletes the team's memberships and invitations before
-soft-deleting the team. A restored team would come back with no members and no owner.
-[ADR-019](DECISIONS.md) settles this: memberships, invitations and owned resources should be
-soft-deleted alongside the team, so a restore is coherent. The controller has not been
-updated yet.
+**Known asymmetry, resolved but not yet implemented.** `Organization` uses `SoftDeletes`, but
+`OrganizationController::destroy` hard-deletes memberships and invitations before soft-deleting
+the organization. A restored organization would come back with no members and no owner.
+[ADR-019](DECISIONS.md) settles this: they should be soft-deleted together, so a restore is
+coherent.
+
+### organization_handles
+
+Every handle an organization has ever held, including the current one. Rows are never deleted.
+
+| Column            | Notes                             |
+| ----------------- | --------------------------------- |
+| `handle`          | **Unique** across the whole table |
+| `organization_id` | FK, `cascadeOnDelete`             |
+
+**Why this table exists.** A mutable handle releases its old value. Without a record, another
+organization could claim `acme` and inherit every stale bookmark pointing at the first one — the
+hazard ADR-006 exists to prevent, arriving through a door ADR-006 never anticipated. It is also
+the seam where handle redirects would live, if they are ever wanted.
 
 ### Membership
 
-`team_members`. An Eloquent `Pivot` model with its own auto-incrementing key.
+`organization_members`. An Eloquent `Pivot` model with its own auto-incrementing key. The class is
+`App\Models\Organizations\Membership` — the name is domain-neutral and survived the rename.
 
-| Column               | Notes                                              |
-| -------------------- | -------------------------------------------------- |
-| `team_id`, `user_id` | Both `cascadeOnDelete`. `UNIQUE(team_id, user_id)` |
-| `role`               | Cast to the `TeamRole` enum                        |
+| Column                       | Notes                                                      |
+| ---------------------------- | ---------------------------------------------------------- |
+| `organization_id`, `user_id` | Both `cascadeOnDelete`. `UNIQUE(organization_id, user_id)` |
+| `role`                       | Cast to the `OrganizationRole` enum                        |
 
-**Why a pivot model rather than a plain pivot table.** The role is domain data, not a join
-detail. Modelling it lets `Membership` be queried, cast and type-hinted directly
-(`$user->teamMemberships()`), rather than reaching through `->pivot` everywhere.
+**Why a pivot model rather than a plain pivot table.** The role is domain data, not a join detail.
+Modelling it lets `Membership` be queried, cast and type-hinted directly
+(`$user->organizationMemberships()`) rather than reaching through `->pivot` everywhere.
 
-**Why the unique constraint is at the database level.** Duplicate memberships would give a
-user two roles on one team, and `teamRole()` returns `first()` — so the effective
-permission would depend on row order. The constraint makes that state unrepresentable
-rather than merely unlikely.
+**Why the unique constraint is at the database level.** Duplicate memberships would give a user two
+roles in one organization, and `organizationRole()` returns `first()` — so the effective permission
+would depend on row order. The constraint makes that state unrepresentable rather than merely
+unlikely.
 
-**Not yet enforced:** there is no constraint guaranteeing exactly one Owner per team.
-`Team::owner()` returns the first member whose role is `owner`. Nothing at the database
-level prevents zero owners or several. [ADR-020](DECISIONS.md) settles that a database
-constraint and a transfer-ownership flow are both needed; neither is built yet.
+**Not yet enforced:** nothing guarantees exactly one Owner per organization.
+`Organization::owner()` returns the first member whose role is `owner`. Nothing at the database
+level prevents zero owners or several. [ADR-020](DECISIONS.md) settles that a partial unique index
+and a transfer-ownership flow are both needed; neither is built.
 
-### TeamInvitation
+### OrganizationInvitation
 
-`team_invitations`. Route key is `code`.
+`organization_invitations`. Route key is `code`.
 
-| Column                  | Notes                                                         |
-| ----------------------- | ------------------------------------------------------------- |
-| `code`                  | `Str::random(64)`, unique, generated on create. The route key |
-| `team_id`, `invited_by` | FKs, `cascadeOnDelete`                                        |
-| `email`                 | The invitee. Compared case-insensitively on accept            |
-| `role`                  | Cast to `TeamRole`                                            |
-| `expires_at`            | Set to `now()->addDays(3)` on create                          |
-| `accepted_at`           | Null while pending                                            |
+| Column                          | Notes                                                         |
+| ------------------------------- | ------------------------------------------------------------- |
+| `code`                          | `Str::random(64)`, unique, generated on create. The route key |
+| `organization_id`, `invited_by` | FKs, `cascadeOnDelete`                                        |
+| `email`                         | The invitee. Compared case-insensitively on accept            |
+| `role`                          | Cast to `OrganizationRole`                                    |
+| `expires_at`                    | Set to `now()->addDays(3)` on create                          |
+| `accepted_at`                   | Null while pending                                            |
 
-**Why the code is the route key.** An invitation URL must be usable by someone who does not
-yet have an account, so it cannot be behind normal authorisation at discovery time. A
-64-character random code makes the URL itself unguessable.
+**Why the code is the route key.** An invitation URL must be usable by someone who does not yet
+have an account, so it cannot be behind normal authorisation at discovery time. A 64-character
+random code makes the URL itself unguessable. These are the only two routes outside the `org/`
+prefix that touch an organization, for exactly this reason.
 
-**The code alone is not sufficient authority.** `ValidTeamInvitation` additionally requires
-that the authenticated user's email matches the invitation's email, case-insensitively. So
-a leaked invitation link cannot be redeemed by whoever finds it — they would also need
-control of the invited mailbox. This is deliberate; see [SECURITY.md](SECURITY.md).
+**The code alone is not sufficient authority.** `ValidOrganizationInvitation` additionally requires
+that the authenticated user's email matches the invitation's, case-insensitively. A leaked
+invitation link cannot be redeemed by whoever finds it — they would also need control of the
+invited mailbox. Deliberate; see [SECURITY.md](SECURITY.md) and [ADR-009](DECISIONS.md).
+[Q11](OPEN_QUESTIONS.md) records what social login will do to that requirement.
 
 **Why invitations expire and are pruned.** Three days, with a daily scheduled prune in
-`routes/console.php`. An unbounded pending invitation is a standing grant of access to a
-tenant, held by an address that may change hands.
+`routes/console.php`. An unbounded pending invitation is a standing grant of access to a tenant,
+held by an address that may change hands.
 
 ## Roles and permissions
 
-Roles are an enum (`App\Enums\TeamRole`), not strings in the database schema, and
-permissions are a separate enum (`App\Enums\TeamPermission`) mapped from role to permission
-set.
+Roles are an enum (`App\Enums\Organizations\OrganizationRole`), not strings in the database schema,
+and permissions are a separate enum (`App\Enums\Organizations\OrganizationPermission`) mapped from
+role to permission set.
 
-| Permission          | Owner | Admin | Member |
-| ------------------- | :---: | :---: | :----: |
-| `team:update`       |  ✅   |  ✅   |   —    |
-| `team:delete`       |  ✅   |   —   |   —    |
-| `member:add`        |  ✅   |   —   |   —    |
-| `member:update`     |  ✅   |   —   |   —    |
-| `member:remove`     |  ✅   |   —   |   —    |
-| `invitation:create` |  ✅   |  ✅   |   —    |
-| `invitation:cancel` |  ✅   |  ✅   |   —    |
+| Permission            | Owner | Admin | Member |
+| --------------------- | :---: | :---: | :----: |
+| `organization:update` |  ✅   |  ✅   |   —    |
+| `organization:delete` |  ✅   |   —   |   —    |
+| `member:add`          |  ✅   |   —   |   —    |
+| `member:update`       |  ✅   |   —   |   —    |
+| `member:remove`       |  ✅   |   —   |   —    |
+| `invitation:create`   |  ✅   |  ✅   |   —    |
+| `invitation:cancel`   |  ✅   |  ✅   |   —    |
 
-**Why permissions are separate from roles.** Checks in policies and controllers ask "does
-this user hold `member:remove`?", never "is this user an admin?". Adding a role, or moving
-a capability between roles, is then a one-line change in `TeamRole::permissions()` instead
-of a search-and-replace across the codebase.
+**Why permissions are separate from roles.** Checks in policies and controllers ask "does this user
+hold `member:remove`?", never "is this user an admin?". Adding a role, or moving a capability
+between roles, is then a one-line change in `OrganizationRole::permissions()` instead of a
+search-and-replace across the codebase.
 
-**Why Admins can invite but not manage members.** An Admin can grow the team but cannot
-change anyone's role or remove anyone — including cannot escalate themselves. Membership
-control stays with the Owner. `TeamRole::assignable()` also excludes Owner from the
-assignable list, so ownership cannot be granted through the member-role UI at all.
+**Admins currently cannot manage members** — they can grow the organization but cannot change
+anyone's role or remove anyone, so an Admin cannot escalate themselves.
+`OrganizationRole::assignable()` also excludes Owner, so ownership cannot be granted through the
+member-role UI at all.
 
-**Revised by [ADR-028](DECISIONS.md), not yet implemented.** Admin gains `member:add`,
-`member:update`, `member:remove` and `invitation:create`, each bounded to roles ranking
-**strictly below the actor's own** — so an Admin manages Members and nothing else. The bound
-lives in `OrganizationPolicy` via `TeamRole::level()` (Owner 3, Admin 2, Member 1), which exists
-today and is used by nothing. `assignable()` still excludes Owner, so the sentence above about
-ownership remains true. See ADR-028 for the revised table.
+**That is being widened, for a security reason.** [ADR-028](DECISIONS.md) grants Admin
+`member:add`, `member:update`, `member:remove` and `invitation:create`, each bounded to roles
+ranking **strictly below the actor's own**. Today only the Owner can revoke access, so an
+unreachable Owner means a departing employee keeps access — the safest-looking permission map
+produces the least safe outcome. The bound lives in `OrganizationPolicy` via
+`OrganizationRole::level()` (Owner 3, Admin 2, Member 1), so the enum keeps reading as a plain
+specification. Not yet implemented — phase 6, tracked as gap G9 in [SECURITY.md](SECURITY.md).
 
-`TeamRole::level()` (Owner 3, Admin 2, Member 1) supports `isAtLeast()`, used by the
-`EnsureTeamMembership` middleware's optional minimum-role parameter. That parameter is
+`OrganizationRole::level()` also supports `isAtLeast()`, used by the
+`EnsureOrganizationMembership` middleware's optional minimum-role parameter. That parameter is
 currently unused by any route.
 
 ## Data exposed to the frontend
 
-Two readonly DTOs in `app/Data/` shape what crosses into React:
+Two readonly DTOs in `app/Data/Organizations/` shape what crosses into React:
 
-- `UserTeam` — id, name, slug, isPersonal, role, roleLabel, isCurrent
-- `TeamPermissions` — seven booleans, one per `TeamPermission`
+- `UserOrganization` — id, name, handle, isPersonal, role, roleLabel, isCurrent
+- `OrganizationPermissions` — seven booleans, one per `OrganizationPermission`
 
-`HandleInertiaRequests` shares `currentTeam` and `teams` as lazy props on every page.
+`HandleInertiaRequests` shares `currentOrganization` and `organizations` as lazy props on every
+page.
 
 **Why booleans rather than the role.** The frontend renders on capability
-(`permissions.canDeleteTeam`), never on role name. The UI cannot then drift out of sync
-with the backend's permission map. It also keeps the frontend honest: these booleans decide
-what is _shown_; the policy decides what is _allowed_, and the policy is checked again on
-every mutating request.
+(`permissions.canDeleteOrganization`), never on role name. The UI cannot then drift out of sync
+with the backend's permission map. It also keeps the frontend honest: these booleans decide what is
+_shown_; the policy decides what is _allowed_, and the policy is checked again on every mutating
+request.
 
-Their TypeScript counterparts live in `resources/js/types/teams.ts` and are maintained by
+Their TypeScript counterparts live in `resources/js/types/organizations.ts` and are maintained by
 hand. **Changing a DTO means changing that file in the same commit.**
+
+Note the existing inconsistency: the DTOs serialise camelCase (`isPersonal`, `handle`), while
+hand-built controller arrays use snake_case for some keys (`role_label`). Match whatever the
+endpoint you are touching already emits rather than "fixing" it in passing.
 
 ## Modelling constraints for what comes next
 
 When Servers and Sites are added:
 
-1. Every tenant-owned table gets a `team_id` foreign key. Ownership is a column, never
+1. Every tenant-owned table gets an `organization_id` foreign key. Ownership is a column, never
    something inferred from a chain of joins.
-2. Access is scoped at query time via the team relationship, never by loading and then
+2. Access is scoped at query time via the organization relationship, never by loading and then
    filtering in PHP.
-3. Route keys for tenant resources should be non-sequential for the same enumeration
-   reasons the team slug is. [ADR-030](DECISIONS.md) settles this with one shared
-   implementation: the `GeneratesHandle` trait built for `Organization` is reused by `Site`,
-   `Server` and `Client`, rather than each table re-deciding.
-4. Anything holding a credential to reach a customer server is encrypted at rest, and is
-   never exposed through an Inertia prop.
+3. Route keys for tenant resources are non-sequential, for the same enumeration reasons the
+   organization handle is. [ADR-030](DECISIONS.md) settles this with one shared implementation:
+   the `GeneratesHandle` trait built for `Organization` is reused by `Site`, `Server` and `Client`
+   rather than each table re-deciding.
+4. Anything holding a credential to reach a customer server is encrypted at rest, and is never
+   exposed through an Inertia prop.
 
-These are consequences of the tenant-isolation rule in [SECURITY.md](SECURITY.md), not
-independent preferences.
+These are consequences of the tenant-isolation rule in [SECURITY.md](SECURITY.md), not independent
+preferences.
+
+**Read [Q13](OPEN_QUESTIONS.md) before writing the first `Site` query.** Every member of an
+organization currently sees everything in it, and the moment resource queries are written that
+assumption sets. Whether a membership can be scoped to a subset of clients is deliberately still
+open.
 
 Two of the entities coming next are already decided, though not yet built — see
 [ADR-017](DECISIONS.md) and [ADR-018](DECISIONS.md):
 
-- **`Client`** — owned by a `Team`, not a tenancy level. `Site` (and later `Domain`,
+- **`Client`** — owned by an `Organization`, not a tenancy level. `Site` (and later `Domain`,
   `Mailbox`) carries a nullable `client_id` for grouping and future billing/ticketing.
 - **`Site`** — the hosted resource, anchored to a domain, with a required `type` column.
-  Multi-process types (e.g. `docker_compose`) get child `SiteService` rows; `wordpress` and
-  other single-process types have none.
+  Multi-process types (e.g. `docker_compose`) get child `SiteService` rows; `wordpress` and other
+  single-process types have none.
