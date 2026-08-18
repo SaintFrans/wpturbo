@@ -5,28 +5,33 @@ feature inherits its isolation from what happens here. Read
 [docs/DATA_MODEL.md](../../../../docs/DATA_MODEL.md) and
 [docs/SECURITY.md](../../../../docs/SECURITY.md) before changing anything in it.
 
-> **The name "Organization" is provisional.** It may become agency accounts, client organisations,
-> or something else, and the model may need a second level. This is undecided — see
-> [docs/OPEN_QUESTIONS.md](../../../../docs/OPEN_QUESTIONS.md) (Q1). **Do not invent a name
-> and do not refactor towards one.** If a task depends on the answer, stop and ask.
+`Organization` is the settled tenancy boundary — see the "Organizations, Clients, and Sites —
+settled" section of the root [CLAUDE.md](../../../../CLAUDE.md) and
+[ADR-025](../../../../docs/DECISIONS.md) through [ADR-031](../../../../docs/DECISIONS.md). Do not
+re-litigate the name or reopen a second tenancy level. Raise it again only if new information
+genuinely contradicts one of those ADRs.
 
-## The domain spans seven directories
+## The domain is spread across many type folders
 
-Because `app/` is organised by type, organization code is not all here:
+Because `app/` is organised by Laravel type with a subfolder per domain inside each
+([ADR-026](../../../../docs/DECISIONS.md)), organization code is not all here:
 
-| Concern               | Location                                                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------- |
-| Controllers           | `app/Http/Controllers/Organizations/`                                                       |
-| Organization creation | `app/Actions/Organizations/CreateOrganization.php`                                          |
-| User-side tenancy API | `app/Concerns/HasOrganizations.php`                                                         |
-| Models                | `app/Models/{Organization,Membership,OrganizationInvitation}.php`                           |
-| Roles and permissions | `app/Enums/{OrganizationRole,OrganizationPermission}.php`                                   |
-| Authorisation         | `app/Policies/OrganizationPolicy.php`                                                       |
-| Tenant boundary       | `app/Http/Middleware/EnsureOrganizationMembership.php`                                      |
-| URL defaults          | `app/Http/Middleware/SetOrganizationUrlDefaults.php`                                        |
-| Validation rules      | `app/Rules/{OrganizationName,UniqueOrganizationInvitation,ValidOrganizationInvitation}.php` |
-| DTOs                  | `app/Data/{UserOrganization,OrganizationPermissions}.php`                                   |
-| Frontend types        | `resources/js/types/organizations.ts`                                                       |
+| Concern               | Location                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Controllers           | `app/Http/Controllers/Organizations/` — `OrganizationController`, `OrganizationMemberController`, `OrganizationInvitationController` |
+| Organization creation | `app/Actions/Organizations/CreateOrganization.php`, `EnsureUserHasOrganization.php`                                                  |
+| User-side tenancy API | `app/Concerns/Organizations/HasOrganizations.php`                                                                                    |
+| Handle generation     | `app/Concerns/Organizations/GeneratesHandle.php` — reused by `Site`, `Server`, `Client` (ADR-030)                                    |
+| Models                | `app/Models/Organizations/{Organization,Membership,OrganizationInvitation}.php`                                                      |
+| Roles and permissions | `app/Enums/Organizations/{OrganizationRole,OrganizationPermission}.php`                                                              |
+| Authorisation         | `app/Policies/Organizations/OrganizationPolicy.php`                                                                                  |
+| Tenant boundary       | `app/Http/Middleware/EnsureOrganizationMembership.php`                                                                               |
+| URL defaults          | `app/Http/Middleware/SetOrganizationUrlDefaults.php`                                                                                 |
+| Requests              | `app/Http/Requests/Organizations/*.php`                                                                                              |
+| Validation rules      | `app/Rules/Organizations/{OrganizationHandle,UniqueOrganizationInvitation,ValidOrganizationInvitation}.php`                          |
+| Notifications         | `app/Notifications/Organizations/OrganizationInvitation.php` — queued ([ADR-023](../../../../docs/DECISIONS.md))                     |
+| DTOs                  | `app/Data/Organizations/{UserOrganization,OrganizationPermissions}.php`                                                              |
+| Frontend types        | `resources/js/types/organizations.ts`                                                                                                |
 
 A change to roles or permissions usually touches the enum, the policy, the DTO **and** the
 TypeScript type. Check all four.
@@ -34,47 +39,61 @@ TypeScript type. Check all four.
 ## How tenant scoping works here
 
 ```
-/{current_organization}/…  →  EnsureOrganizationMembership  →  403 unless a membership row exists
-                                             →  switches current organization if it differs
+/org/{organization}/…  →  EnsureOrganizationMembership  →  403 unless a membership row exists
+                                                          →  scopes this request only
 ```
 
-`SetOrganizationUrlDefaults` runs on every web request and injects the current slug into
-`URL::defaults()`, so `route('dashboard')` resolves without passing the organization.
+`EnsureOrganizationMembership` resolves the organization from the `{organization}` handle, aborts
+403 unless the authenticated user is a member, and optionally enforces a minimum role via its
+`$minimumRole` parameter — unused by any route today. **It does not switch the user's stored
+current organization** ([ADR-025](../../../../docs/DECISIONS.md), phase 3): a read must not
+perform a write, and visiting a colleague's link used to silently repoint every other tab. Only
+`organizations.switch` (a `POST`) changes `current_organization_id`.
 
-Two route shapes are in use — `/{current_organization}/…` (auto-switches) and
-`/settings/organizations/{organization}` (does not). Which one new routes should use is
-[Q4](../../../../docs/OPEN_QUESTIONS.md). New **tenant resource** routes go under the
-prefixed form.
+`SetOrganizationUrlDefaults` runs on every web request and injects the organization named by the
+_route_ — not the user's stored one — into `URL::defaults()`, so links rendered on
+`/org/{other}/…` correctly point back at `{other}` rather than the user's own organization.
+
+There is one route shape for everything belonging to an organization — resources and
+administration alike — under `/org/{organization}/…` ([ADR-031](../../../../docs/DECISIONS.md)).
+The literal `org/` segment is what makes this safe: a handle can never shadow an application
+route, so there is no reserved-word list to keep running. New **tenant resource** routes
+(`Server`, `Site`, `Client`) belong under this same prefix, inside the
+`EnsureOrganizationMembership` group.
 
 ## Rules specific to this domain
 
-1. **Never bypass `EnsureOrganizationMembership`.** A organization route registered outside that group has
-   no isolation whatsoever.
+1. **Never bypass `EnsureOrganizationMembership`.** An organization route registered outside that
+   group has no isolation whatsoever.
 2. **Ask for permissions, not roles.** `$user->hasOrganizationPermission($organization, OrganizationPermission::X)`
    or `Gate::authorize('x', $organization)`. Never `if ($role === 'admin')`.
 3. **A new capability is a new `OrganizationPermission` case**, mapped in `OrganizationRole::permissions()`,
    surfaced in `OrganizationPermissions`, and mirrored in `resources/js/types/organizations.ts`.
 4. **Verify parent ownership on nested resources.** `OrganizationInvitationController::destroy`
-   checks `$invitation->organization_id === $organization->id` before the policy runs. Nested resources are
-   bound globally by route-model binding — the parent relationship is not checked for you.
-5. **Never let `OrganizationName` validation be skipped.** Organization slugs occupy the first URL segment;
-   without that rule a organization can shadow application routes (ADR-008).
-6. **Slugs are never reissued.** Slug generation queries `withTrashed()` on purpose
-   (ADR-006). Do not "optimise" that away.
-7. **Owner is not assignable.** `OrganizationRole::assignable()` excludes it deliberately. Ownership
-   transfer needs its own designed flow — which does not exist yet
-   ([Q6](../../../../docs/OPEN_QUESTIONS.md)).
+   checks `$invitation->organization_id === $organization->id` before the policy runs. A route
+   parameter bound by id or handle is not checked against its parent for you.
+5. **Never let `OrganizationHandle` validation be skipped.** It enforces shape (a slug) and
+   permanent non-reuse across the live column, soft-deleted rows and `organization_handles`
+   ([ADR-006](../../../../docs/DECISIONS.md), [ADR-030](../../../../docs/DECISIONS.md)) — not
+   reserved words. That list existed once (ADR-008) and was retired for good by
+   [ADR-031](../../../../docs/DECISIONS.md): behind the literal `org/` segment a handle can no
+   longer shadow a route, so there is nothing left to reserve.
+6. **Handles are never reissued.** `GeneratesHandle::handleIsUnavailable()` checks the live
+   column, soft-deleted rows, _and_ `organization_handles` — do not "optimise" away any of the
+   three.
+7. **Owner is excluded from `OrganizationRole::assignableBy()`.** Ownership transfer needs its own
+   flow, decided but not yet built ([G3](../../../../docs/SECURITY.md) — see Known rough edges
+   below).
 8. **Multi-table writes go in a transaction.** Organization creation, deletion and invitation
    acceptance all mutate several tables; a partial write leaves an ownerless organization or an
    orphaned membership.
 
 ## Known rough edges
 
-Do not fix these silently — they are open questions with product implications:
-
-- Organization soft-delete hard-deletes memberships, so a restored organization is ownerless ([Q5](../../../../docs/OPEN_QUESTIONS.md)).
-- Nothing enforces exactly one Owner, and ownership cannot be transferred ([Q6](../../../../docs/OPEN_QUESTIONS.md)).
-- Invitation emails are sent synchronously with no rate limit ([Q8](../../../../docs/OPEN_QUESTIONS.md)).
+- Nothing enforces exactly one Owner, and ownership cannot be transferred (G3 in
+  [docs/SECURITY.md](../../../../docs/SECURITY.md), decided by ADR-020/ADR-029, deliberately not
+  yet built — see [docs/MVP_PLAN.md](../../../../docs/MVP_PLAN.md)). Do not fix this silently; it
+  is sequenced, not forgotten.
 - `organizationRole()` queries per call, so `toUserOrganizations()` is N+1 over the user's organizations. Fine at
   current scale; worth eager-loading if organization counts grow.
 

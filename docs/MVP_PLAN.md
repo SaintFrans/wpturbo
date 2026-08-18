@@ -21,9 +21,9 @@ disproportionately more expensive once servers exist. Nothing is here because it
 
 ## Steps
 
-### 1 — Close the small decided gaps
+### 1 — Close the small decided gaps ✅ done 2026-08-18
 
-All four are settled, all four are small, and one of them is on the critical path.
+All four were settled, all four were small, and one of them sat on the critical path.
 
 | Gap | Work                                                                 | Decided by                                       |
 | --- | -------------------------------------------------------------------- | ------------------------------------------------ |
@@ -35,7 +35,8 @@ All four are settled, all four are small, and one of them is on the critical pat
 **G2 is the one that matters beyond itself.** It is where the queue gets set up and proven on a
 low-stakes notification, which is exactly the pattern provisioning will need. Establishing it now,
 on something that can safely fail, is cheaper than inventing it under pressure when a server
-build is hanging.
+build is hanging. The notification already implemented `ShouldQueue`; the rate limiter was the only
+piece actually missing.
 
 G4 landed first for that reason: `Server` and `Site` join the same delete tree, and adding them to
 a broken one doubles the work.
@@ -46,6 +47,11 @@ removals — leaving, being removed, cancelling an invitation, pruning an expire
 `forceDelete()`, and only the organization's own deletion soft-deletes the tree. It matches what
 [ADR-019](DECISIONS.md) already said, and there is a test asserting a removed member can be
 re-added.
+
+**One thing G6 surfaced.** Two of the three routes binding an invitation by its code were only ever
+reached by an already-authenticated user, whose email-match check (ADR-009) — not the code's
+secrecy — was the actual control. Those now bind by `id`; `code_hash` backs only the one lookup
+that is genuinely pre-authentication, the emailed link. See ADR-033's implementation note.
 
 ### 2 — Audit log (G5)
 

@@ -19,20 +19,22 @@ export type OrganizationMember = {
 };
 
 export type OrganizationInvitation = {
-    code: string;
+    id: number;
     email: string;
     role: OrganizationRole;
     role_label: string;
     created_at: string;
 };
 
+// Unlike the other two, this carries the invitation's plaintext code — it is built from the
+// query string of the emailed link, never read back from storage (ADR-033).
 export type OrganizationInvitationContext = {
     code: string;
     organizationName: string;
 };
 
 export type DashboardInvitation = {
-    code: string;
+    id: number;
     inviterName: string;
     organization: {
         name: string;

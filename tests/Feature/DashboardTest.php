@@ -46,7 +46,7 @@ test('dashboard includes pending invitations for the authenticated user', functi
     $response->assertInertia(fn (Assert $page) => $page
         ->component('dashboard')
         ->has('pendingInvitations', 1)
-        ->where('pendingInvitations.0.code', $invitation->code)
+        ->where('pendingInvitations.0.id', $invitation->id)
         ->where('pendingInvitations.0.inviterName', 'Taylor Otwell')
         ->where('pendingInvitations.0.organization.name', 'Laravel Organization')
         ->where('pendingInvitations.0.organization.publicId', $organization->handle)

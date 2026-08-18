@@ -12,9 +12,13 @@ Route::inertia('/', 'welcome')->name('home');
 Route::middleware(['auth'])->group(function () {
     /*
      * Reached by someone who is not a member yet, so these cannot carry an organization prefix.
+     * Bound by id, not the invitation's secret code — the authenticated user's email match
+     * (ValidOrganizationInvitation, ADR-009) is what authorises accept/decline, the same as
+     * it always has been. The code's secrecy protects the *emailed link* (ADR-033); it was
+     * never what gated these two actions.
      */
-    Route::get('invitations/{invitation}/accept', [OrganizationInvitationController::class, 'accept'])->name('invitations.accept');
-    Route::delete('invitations/{invitation}', [OrganizationInvitationController::class, 'decline'])->name('invitations.decline');
+    Route::get('invitations/{invitation:id}/accept', [OrganizationInvitationController::class, 'accept'])->name('invitations.accept');
+    Route::delete('invitations/{invitation:id}', [OrganizationInvitationController::class, 'decline'])->name('invitations.decline');
 });
 
 /*
@@ -49,8 +53,10 @@ Route::prefix('org/{organization}')
             Route::patch('settings/members/{user}', [OrganizationMemberController::class, 'update'])->name('members.update');
             Route::delete('settings/members/{user}', [OrganizationMemberController::class, 'destroy'])->name('members.destroy');
 
-            Route::post('settings/invitations', [OrganizationInvitationController::class, 'store'])->name('invitations.store');
-            Route::delete('settings/invitations/{invitation}', [OrganizationInvitationController::class, 'destroy'])->name('invitations.destroy');
+            Route::post('settings/invitations', [OrganizationInvitationController::class, 'store'])
+                ->middleware('throttle:invitations')
+                ->name('invitations.store');
+            Route::delete('settings/invitations/{invitation:id}', [OrganizationInvitationController::class, 'destroy'])->name('invitations.destroy');
         });
     });
 

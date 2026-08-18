@@ -173,26 +173,34 @@ and a transfer-ownership flow are both needed; neither is built.
 
 ### OrganizationInvitation
 
-`organization_invitations`. Route key is `code`.
+`organization_invitations`. Route key is `id` — see below for why that is not `code_hash`.
 
-| Column                          | Notes                                                         |
-| ------------------------------- | ------------------------------------------------------------- |
-| `code`                          | `Str::random(64)`, unique, generated on create. The route key |
-| `organization_id`, `invited_by` | FKs, `cascadeOnDelete`                                        |
-| `email`                         | The invitee. Compared case-insensitively on accept            |
-| `role`                          | Cast to `OrganizationRole`                                    |
-| `expires_at`                    | Set to `now()->addDays(3)` on create                          |
-| `accepted_at`                   | Null while pending                                            |
+| Column                          | Notes                                                                  |
+| ------------------------------- | ---------------------------------------------------------------------- |
+| `code_hash`                     | SHA-256 digest of a `Str::random(64)` code generated on create. Unique |
+| `organization_id`, `invited_by` | FKs, `cascadeOnDelete`                                                 |
+| `email`                         | The invitee. Compared case-insensitively on accept                     |
+| `role`                          | Cast to `OrganizationRole`                                             |
+| `expires_at`                    | Set to `now()->addDays(3)` on create                                   |
+| `accepted_at`                   | Null while pending                                                     |
 
-**Why the code is the route key.** An invitation URL must be usable by someone who does not yet
-have an account, so it cannot be behind normal authorisation at discovery time. A 64-character
-random code makes the URL itself unguessable. These are the only two routes outside the `org/`
-prefix that touch an organization, for exactly this reason.
+**The plaintext code is never stored** ([ADR-033](DECISIONS.md)). It exists only in memory on the
+`OrganizationInvitation` instance that just created it (`$invitation->plainCode`, a non-persisted
+property) and in the URL emailed to the invitee. A database read — an operator, a stolen dump —
+therefore yields no usable invitation link, only digests that cannot be reversed into one.
 
-**The code alone is not sufficient authority.** `ValidOrganizationInvitation` additionally requires
-that the authenticated user's email matches the invitation's, case-insensitively. A leaked
-invitation link cannot be redeemed by whoever finds it — they would also need control of the
-invited mailbox. Deliberate; see [SECURITY.md](SECURITY.md) and [ADR-009](DECISIONS.md).
+**Why the code is not the general route key.** Only one lookup is genuinely reached by someone who
+is not authenticated yet: the login/register page reading `?invitation=` from the emailed link,
+resolved in `FortifyServiceProvider` by hashing the incoming value and querying `code_hash`. Every
+other invitation route — `invitations.accept`, `invitations.decline`,
+`organizations.invitations.destroy` — is only ever hit by an already-authenticated user, and what
+actually authorises those was always the check below, not the code's secrecy. They bind by `id`.
+
+**The code alone is not sufficient authority, for the one route that still uses it.**
+`ValidOrganizationInvitation` additionally requires that the authenticated user's email matches
+the invitation's, case-insensitively. A leaked invitation link cannot be redeemed by whoever finds
+it — they would also need control of the invited mailbox. Deliberate; see
+[SECURITY.md](SECURITY.md) and [ADR-009](DECISIONS.md).
 
 **Why invitations expire and are pruned.** Three days, with a daily scheduled prune in
 `routes/console.php`. An unbounded pending invitation is a standing grant of access to a tenant,

@@ -44,7 +44,7 @@ already rejected for ownership.
 
 **Why** — The need this would answer — an agency wanting to keep a freelancer or junior off a
 sensitive client — has not appeared, and what agencies actually ask for is narrower: stopping the
-wrong person from *deleting* a site or a client, not hiding it from their dashboard. That is a
+wrong person from _deleting_ a site or a client, not hiding it from their dashboard. That is a
 capability question, and the platform already has a mechanism for it
 ([ADR-005](#adr-005--permissions-are-an-enum-decoupled-from-roles),
 [ADR-028](#adr-028--admins-manage-members-below-their-own-role)). Building a visibility layer to
@@ -222,7 +222,7 @@ the same out-of-band verification ADR-029 specifies, and it is far too rare to j
 
 ## ADR-033 — Invitation codes are stored hashed
 
-**2026-08-18** · **Status**: Accepted. Amends
+**2026-08-18** · **Status**: Accepted, **implemented 2026-08-18**. Amends
 [ADR-009](#adr-009--the-invitation-code-alone-does-not-grant-access); closes
 [G6](SECURITY.md).
 
@@ -255,11 +255,27 @@ that revives an old link leaves two valid credentials in two inboxes.
 
 - The route key is no longer a plain column. Binding resolves by hashing the incoming segment,
   so `getRouteKeyName()` cannot carry it alone.
-- `UniqueOrganizationInvitation` and the prune job work on the hash; neither reads the plaintext.
+- `UniqueOrganizationInvitation` and the prune job never touched the code to begin with — they
+  match on `email`/`organization_id`/`accepted_at`/`expires_at` — so hashing changed nothing there.
 - Any future invite-style token — server enrolment in [Q2](OPEN_QUESTIONS.md) especially —
   follows this shape rather than inventing its own.
 - Existing rows cannot be migrated, since the plaintext cannot be recovered from itself in a
   meaningful way. There is no production data; local databases are rebuilt.
+
+**What implementation found that this entry did not anticipate.** Three routes were binding
+`{invitation}` by the plain code column, and only one of them — the emailed link, resolved by
+`FortifyServiceProvider` from the login/register query string — is actually reached by someone who
+isn't authenticated yet. The other two, `invitations.accept`/`invitations.decline` (the dashboard's
+"pending invitations" modal) and `organizations.invitations.destroy` (cancelling from the members
+settings page), are only ever hit by an already-authenticated user, and their real authorisation
+was always [ADR-009](#adr-009--the-invitation-code-alone-does-not-grant-access)'s email-match
+check or the organisation's own permission gate — never the code's secrecy. Hashing would have
+forced the members page to keep exposing something usable as a lookup key regardless, which is the
+exact exposure this ADR closes, had those two stayed code-bound. They now bind by `id`
+(`{invitation:id}`) instead: no loss of security, since `ValidOrganizationInvitation` and
+`cancelInvitation` are unmoved, and one fewer place capable of leaking a usable link. `code_hash`
+now backs exactly one lookup — the genuinely pre-authentication one — which is the shape this
+entry actually intended.
 
 ---
 
@@ -866,7 +882,7 @@ side effect.
 
 ## ADR-023 — Invitation emails are rate-limited and queued
 
-**2026-08-17** · **Status**: Accepted
+**2026-08-17** · **Status**: Accepted, **implemented 2026-08-18**. Closes [G2](SECURITY.md).
 
 **Decision** — Resolves [Q8](OPEN_QUESTIONS.md). `TeamInvitationController::store` gets a
 rate limiter matching the shape already used for login/2FA/passkeys. The invitation
@@ -901,6 +917,13 @@ notification, is cheaper than inventing it under pressure later.
   process, or equivalent) — not optional once this ADR lands.
 - Failed queued jobs use Laravel's standard failed-jobs table; no custom failure handling is
   introduced by this decision.
+
+**What implementation found.** The notification already implemented `ShouldQueue` — it had from
+the start, before this ADR was written down — so on-demand notifications queue automatically and
+that half needed no code change at all. The only gap actually open was the rate limiter, added as
+`RateLimiter::for('invitations', …)` in `FortifyServiceProvider`, 5/min keyed by the inviting
+user's ID, applied to `organizations.invitations.store`. The production worker remains a deployment
+task, tracked under [ADR-035](#adr-035--laravel-cloud-is-the-deployment-target), not code.
 
 ---
 

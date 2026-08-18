@@ -35,8 +35,12 @@ class OrganizationInvitationController extends Controller
             'expires_at' => now()->addDays(3),
         ]);
 
+        // Always set by the model's `creating` hook; asserted so the notification's
+        // constructor can require a `string` rather than a `?string` (ADR-033).
+        assert($invitation->plainCode !== null);
+
         Notification::route('mail', $invitation->email)
-            ->notify(new OrganizationInvitationNotification($invitation));
+            ->notify(new OrganizationInvitationNotification($invitation, $invitation->plainCode));
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Invitation sent.')]);
 

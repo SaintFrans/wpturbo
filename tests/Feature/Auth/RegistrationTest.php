@@ -23,12 +23,12 @@ test('registration screen includes organization invitation context', function ()
         'invited_by' => $owner->id,
     ]);
 
-    $response = $this->get(route('register', ['invitation' => $invitation->code]));
+    $response = $this->get(route('register', ['invitation' => $invitation->plainCode]));
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
         ->component('auth/register')
-        ->where('organizationInvitation.code', $invitation->code)
+        ->where('organizationInvitation.code', $invitation->plainCode)
         ->where('organizationInvitation.organizationName', 'Laravel Organization'),
     );
 });

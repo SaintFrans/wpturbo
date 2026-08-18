@@ -112,10 +112,17 @@ class FortifyServiceProvider extends ServiceProvider
                 ($credentialId ?: $request->session()->getId()).'|'.$request->ip(),
             );
         });
+
+        RateLimiter::for('invitations', function (Request $request) {
+            return Limit::perMinute(5)->by($request->user()?->id);
+        });
     }
 
     /**
      * Get the pending organization invitation context for auth pages.
+     *
+     * The query string carries the plaintext code; only its hash is ever stored
+     * (ADR-033), so the lookup hashes the incoming value rather than binding a route.
      *
      * @return array{code: string, organizationName: string}|null
      */
@@ -129,7 +136,7 @@ class FortifyServiceProvider extends ServiceProvider
 
         $invitation = OrganizationInvitation::query()
             ->with('organization')
-            ->where('code', $invitationCode)
+            ->where('code_hash', hash('sha256', $invitationCode))
             ->whereNull('accepted_at')
             ->where(fn ($query) => $query
                 ->whereNull('expires_at')
@@ -141,7 +148,7 @@ class FortifyServiceProvider extends ServiceProvider
         }
 
         return [
-            'code' => $invitation->code,
+            'code' => $invitationCode,
             'organizationName' => $invitation->organization->name,
         ];
     }

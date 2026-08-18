@@ -23,7 +23,7 @@ class DashboardController extends Controller
             ->latest()
             ->get()
             ->map(fn (OrganizationInvitation $invitation) => [
-                'code' => $invitation->code,
+                'id' => $invitation->id,
                 'inviterName' => $invitation->inviter->name,
                 'organization' => [
                     'name' => $invitation->organization->name,

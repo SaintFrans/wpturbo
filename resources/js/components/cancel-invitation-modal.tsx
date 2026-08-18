@@ -32,14 +32,11 @@ export default function CancelInvitationModal({
             return;
         }
 
-        router.visit(
-            destroyInvitation([organization.handle, invitation.code]),
-            {
-                onStart: () => setProcessing(true),
-                onFinish: () => setProcessing(false),
-                onSuccess: () => onOpenChange(false),
-            },
-        );
+        router.visit(destroyInvitation([organization.handle, invitation.id]), {
+            onStart: () => setProcessing(true),
+            onFinish: () => setProcessing(false),
+            onSuccess: () => onOpenChange(false),
+        });
     };
 
     return (

@@ -44,9 +44,9 @@ test('invitation email for existing users uses login route', function () {
         'invited_by' => $owner->id,
     ]);
 
-    $mail = (new OrganizationInvitationNotification($invitation))->toMail($invitedUser);
+    $mail = (new OrganizationInvitationNotification($invitation, $invitation->plainCode))->toMail($invitedUser);
 
-    expect($mail->actionUrl)->toBe(route('login', ['invitation' => $invitation->code]));
+    expect($mail->actionUrl)->toBe(route('login', ['invitation' => $invitation->plainCode]));
     $this->assertStringContainsString('dashboard', implode(' ', $mail->introLines));
 });
 
@@ -62,9 +62,9 @@ test('invitation email for unknown users uses login route', function () {
         'invited_by' => $owner->id,
     ]);
 
-    $mail = (new OrganizationInvitationNotification($invitation))->toMail((object) []);
+    $mail = (new OrganizationInvitationNotification($invitation, $invitation->plainCode))->toMail((object) []);
 
-    expect($mail->actionUrl)->toBe(route('login', ['invitation' => $invitation->code]));
+    expect($mail->actionUrl)->toBe(route('login', ['invitation' => $invitation->plainCode]));
     $this->assertStringContainsString('log in', strtolower(implode(' ', $mail->introLines)));
 });
 
@@ -310,4 +310,61 @@ test('expired invitations cannot be accepted', function () {
     $response->assertSessionHasErrors('invitation');
 
     expect($invitedUser->fresh()->belongsToOrganization($organization))->toBeFalse();
+});
+
+test('invitation codes are stored hashed, never in plaintext', function () {
+    Notification::fake();
+
+    $owner = User::factory()->create();
+    $organization = Organization::factory()->create();
+    $organization->members()->attach($owner, ['role' => OrganizationRole::Owner->value]);
+
+    $this
+        ->actingAs($owner)
+        ->post(route('organizations.invitations.store', $organization), [
+            'email' => 'invited@example.com',
+            'role' => OrganizationRole::Member->value,
+        ]);
+
+    $invitation = OrganizationInvitation::query()->where('email', 'invited@example.com')->firstOrFail();
+
+    // The plaintext only ever existed on the instance the controller just created — a fresh
+    // read, as here, never carries it (that is the whole point of ADR-033).
+    expect($invitation->plainCode)->toBeNull();
+    expect($invitation->code_hash)->toHaveLength(64);
+
+    // The plaintext that went into the email is recovered from the notification itself, since
+    // it cannot be recovered from storage, and must hash to the value that was stored.
+    Notification::assertSentOnDemand(
+        OrganizationInvitationNotification::class,
+        fn (OrganizationInvitationNotification $notification): bool => $notification->plainCode !== $invitation->code_hash
+            && hash('sha256', $notification->plainCode) === $invitation->code_hash,
+    );
+});
+
+test('invitation creation is rate limited', function () {
+    Notification::fake();
+
+    $owner = User::factory()->create();
+    $organization = Organization::factory()->create();
+    $organization->members()->attach($owner, ['role' => OrganizationRole::Owner->value]);
+
+    for ($i = 0; $i < 5; $i++) {
+        $this
+            ->actingAs($owner)
+            ->post(route('organizations.invitations.store', $organization), [
+                'email' => "invited{$i}@example.com",
+                'role' => OrganizationRole::Member->value,
+            ])
+            ->assertRedirect(route('organizations.edit', $organization));
+    }
+
+    $response = $this
+        ->actingAs($owner)
+        ->post(route('organizations.invitations.store', $organization), [
+            'email' => 'onemore@example.com',
+            'role' => OrganizationRole::Member->value,
+        ]);
+
+    $response->assertStatus(429);
 });

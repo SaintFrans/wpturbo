@@ -49,7 +49,9 @@ return new class extends Migration
 
         Schema::create('organization_invitations', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 64)->unique();
+            // SHA-256 digest of the invitation code. The plaintext exists only in the URL
+            // emailed to the invitee; it is never stored (ADR-033).
+            $table->string('code_hash', 64)->unique();
             $table->foreignId('organization_id')->constrained()->cascadeOnDelete();
             $table->string('email');
             $table->string('role');

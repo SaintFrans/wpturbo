@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 
 /**
  * @property int $id
- * @property string $code
+ * @property string $code_hash
  * @property int $organization_id
  * @property string $email
  * @property OrganizationRole $role
@@ -34,6 +34,13 @@ class OrganizationInvitation extends Model
     use HasFactory, SoftDeletes;
 
     /**
+     * The random plaintext code, available only in memory on the instance that just created
+     * it. Never persisted — only its SHA-256 digest is (ADR-033) — and lost the moment this
+     * model is refetched or a queued job holding it gets deserialized.
+     */
+    public ?string $plainCode = null;
+
+    /**
      * Bootstrap the model and its traits.
      */
     protected static function boot(): void
@@ -41,9 +48,8 @@ class OrganizationInvitation extends Model
         parent::boot();
 
         static::creating(function (OrganizationInvitation $invitation) {
-            if (empty($invitation->code)) {
-                $invitation->code = Str::random(64);
-            }
+            $invitation->plainCode ??= Str::random(64);
+            $invitation->code_hash = hash('sha256', $invitation->plainCode);
         });
     }
 
@@ -105,11 +111,7 @@ class OrganizationInvitation extends Model
         ];
     }
 
-    /**
-     * Get the route key for the model.
-     */
-    public function getRouteKeyName(): string
-    {
-        return 'code';
-    }
+    // No custom route key: every route binds by `id`. The one genuinely secret lookup — the
+    // link emailed to the invitee — is resolved by hashing the incoming code by hand in
+    // FortifyServiceProvider, not through route-model binding.
 }

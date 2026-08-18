@@ -14,8 +14,13 @@ class OrganizationInvitation extends Notification implements ShouldQueue
 
     /**
      * Create a new notification instance.
+     *
+     * The plaintext code is passed separately from the invitation model: only its hash is
+     * ever persisted (ADR-033), and this notification is queued, so the code must survive
+     * serialisation as a plain string rather than as an attribute that a refetched model
+     * would no longer carry.
      */
-    public function __construct(public OrganizationInvitationModel $invitation)
+    public function __construct(public OrganizationInvitationModel $invitation, public string $plainCode)
     {
         //
     }
@@ -47,7 +52,7 @@ class OrganizationInvitation extends Notification implements ShouldQueue
             ->line(__('Log in and visit your dashboard to accept or decline this invitation.'))
             ->action(
                 __('Log in'),
-                route('login', ['invitation' => $this->invitation->code]),
+                route('login', ['invitation' => $this->plainCode]),
             );
     }
 

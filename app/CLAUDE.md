@@ -20,20 +20,20 @@ the security rule; this file covers how code in `app/` is structured.
 
 ## Where things go
 
-| Directory           | Contains                                           | Notes                                                                                        |
-| ------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `Actions/`          | Single-purpose operations with a `handle()` method | Where a mutation is non-trivial or reused. Wrap multi-table writes in `DB::transaction()`    |
-| `Concerns/`         | Traits shared across models or requests            | `HasOrganizations` is the tenancy surface on `User`                                          |
-| `Data/`             | `readonly` DTOs passed to Inertia                  | Constructor property promotion, no logic                                                     |
-| `Enums/`            | Backed string enums                                | `TitleCase` keys, behaviour as methods on the enum                                           |
-| `Http/Controllers/` | Thin controllers                                   | Authorise, delegate, render. No business logic                                               |
-| `Http/Middleware/`  | Cross-cutting request concerns                     | `EnsureOrganizationMembership` is the tenant boundary                                        |
-| `Http/Requests/`    | Validation and request authorisation               | Custom rules go in `Rules/`, not inline closures                                             |
-| `Http/Responses/`   | Fortify response contract overrides                | Post-auth redirect targets                                                                   |
-| `Models/`           | Eloquent models                                    | Full `@property` docblocks; `#[Fillable]` / `#[Hidden]` attributes                           |
-| `Notifications/`    | Outbound notifications                             | Currently sent synchronously; ADR-023 requires `ShouldQueue` + a rate limiter, not yet built |
-| `Policies/`         | Authorisation policies                             | Ask for a `OrganizationPermission`, never a role string                                      |
-| `Rules/`            | Reusable validation rules                          | No reserved-name rule any more — see below                                                   |
+| Directory           | Contains                                           | Notes                                                                                     |
+| ------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `Actions/`          | Single-purpose operations with a `handle()` method | Where a mutation is non-trivial or reused. Wrap multi-table writes in `DB::transaction()` |
+| `Concerns/`         | Traits shared across models or requests            | `HasOrganizations` is the tenancy surface on `User`                                       |
+| `Data/`             | `readonly` DTOs passed to Inertia                  | Constructor property promotion, no logic                                                  |
+| `Enums/`            | Backed string enums                                | `TitleCase` keys, behaviour as methods on the enum                                        |
+| `Http/Controllers/` | Thin controllers                                   | Authorise, delegate, render. No business logic                                            |
+| `Http/Middleware/`  | Cross-cutting request concerns                     | `EnsureOrganizationMembership` is the tenant boundary                                     |
+| `Http/Requests/`    | Validation and request authorisation               | Custom rules go in `Rules/`, not inline closures                                          |
+| `Http/Responses/`   | Fortify response contract overrides                | Post-auth redirect targets                                                                |
+| `Models/`           | Eloquent models                                    | Full `@property` docblocks; `#[Fillable]` / `#[Hidden]` attributes                        |
+| `Notifications/`    | Outbound notifications                             | Queued (`ShouldQueue`); the triggering route carries a rate limiter (ADR-023)             |
+| `Policies/`         | Authorisation policies                             | Ask for a `OrganizationPermission`, never a role string                                   |
+| `Rules/`            | Reusable validation rules                          | No reserved-name rule any more — see below                                                |
 
 There is no `Jobs/`, `Services/` or `Events/` directory yet. Adding one is a structural
 decision — ask first.

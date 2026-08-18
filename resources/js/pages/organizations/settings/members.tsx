@@ -207,7 +207,7 @@ export default function OrganizationMembersSettings({
                             <FrameGroup>
                                 {invitations.map((invitation) => (
                                     <div
-                                        key={invitation.code}
+                                        key={invitation.id}
                                         data-test="invitation-row"
                                         className="flex items-center justify-between gap-4 px-4 py-3"
                                     >

@@ -27,13 +27,23 @@ test('login screen includes organization invitation context', function () {
         'invited_by' => $owner->id,
     ]);
 
-    $response = $this->get(route('login', ['invitation' => $invitation->code]));
+    $response = $this->get(route('login', ['invitation' => $invitation->plainCode]));
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
         ->component('auth/login')
-        ->where('organizationInvitation.code', $invitation->code)
+        ->where('organizationInvitation.code', $invitation->plainCode)
         ->where('organizationInvitation.organizationName', 'Laravel Organization'),
+    );
+});
+
+test('login screen ignores an invitation code that does not match any invitation', function () {
+    $response = $this->get(route('login', ['invitation' => str_repeat('x', 64)]));
+
+    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('auth/login')
+        ->where('organizationInvitation', null),
     );
 });
 

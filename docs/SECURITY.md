@@ -2,11 +2,13 @@
 
 _Last verified against the codebase: 2026-08-18._
 
-Everything decided up to and including [ADR-034](DECISIONS.md) is implemented — the soft-delete
-tree (G4) and the fail-safe password policy (G8) closed on 2026-08-18. [ADR-032](DECISIONS.md),
-[ADR-033](DECISIONS.md), [ADR-035](DECISIONS.md) and [ADR-036](DECISIONS.md) are decided and not
-yet built — they are the answers to gaps G2, G5 and G6 in §4, and each gap says which ADR settles
-it. [ADR-037](DECISIONS.md) (Q13) needs no implementation: it confirms current query behaviour.
+Everything decided up to and including [ADR-034](DECISIONS.md) is implemented, plus
+[ADR-023](DECISIONS.md) and [ADR-033](DECISIONS.md) (closing G2 and G6). What remains: **G5**, the
+audit log ([ADR-032](DECISIONS.md)), and the retention purge tasks
+([ADR-036](DECISIONS.md)) that depend on it existing; **G3**, ownership transfer
+([ADR-020](DECISIONS.md), [ADR-029](DECISIONS.md)), deliberately deferred — see
+[MVP_PLAN.md](MVP_PLAN.md); and **G1**, the agent, which has no decision yet
+([Q2](OPEN_QUESTIONS.md)).
 
 ## 0. The rule
 
@@ -138,6 +140,7 @@ Fortify with email verification, 2FA (TOTP + recovery codes) and passkeys. Rate 
 | `two-factor`    | 5/min  | pending login session ID           |
 | `passkeys`      | 10/min | credential ID (or session ID) + IP |
 | password update | 6/min  | route throttle                     |
+| `invitations`   | 5/min  | inviting user's ID                 |
 
 The security settings page sits behind `RequirePassword`, so viewing or changing 2FA and
 passkeys requires password re-confirmation within the session.
@@ -208,10 +211,22 @@ still applies, and an ownership change is precisely the event an audit log shoul
 
 ### Invitations
 
-64-character random code as the route key; email must match the authenticated user's,
-case-insensitively; 3-day expiry; daily prune of expired rows; duplicate invitations and
-invitations to existing members are rejected (`UniqueOrganizationInvitation`); cancelling an
-invitation verifies it belongs to the organization in the URL before the policy check.
+64-character random code, stored as a SHA-256 digest rather than plaintext ([ADR-033](DECISIONS.md));
+email must match the authenticated user's, case-insensitively; 3-day expiry; daily prune of
+expired rows; duplicate invitations and invitations to existing members are rejected
+(`UniqueOrganizationInvitation`); cancelling an invitation verifies it belongs to the organization
+in the URL before the policy check; creating one is rate-limited to 5/min per inviting user
+([ADR-023](DECISIONS.md)).
+
+**The code is not a general route key.** It is resolved by hand — hashing the incoming value and
+looking up `code_hash` — only where it is genuinely acting as a secret: the link emailed to the
+invitee (`FortifyServiceProvider::organizationInvitation()`). Every other invitation route
+(`invitations.accept`, `invitations.decline`, `organizations.invitations.destroy`) binds by `id`.
+This is deliberate, not a shortcut: `ValidOrganizationInvitation`'s email-match check
+([ADR-009](DECISIONS.md)) is what actually authorises accept and decline, so binding those by `id`
+grants a guesser nothing — they still cannot act on an invitation addressed to someone else's
+mailbox. Reserve `code_hash` lookups for contexts where the recipient is not yet authenticated at
+all, matching the shape ADR-033 lays out for any future invite-style token.
 
 `invitations.accept` and `invitations.decline` are the only organization-touching routes outside
 the `org/` prefix, because the recipient is not a member yet.
@@ -223,11 +238,11 @@ Recorded honestly. None is currently being exploited; all are real.
 | #   | Gap                                                                                        | Impact                                                                                                                                                                                                                                                                          | Tracked                                          |
 | --- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | G1  | The entire agent, transport and server-credential model is undesigned                      | The highest-consequence part of the platform has no security design at all                                                                                                                                                                                                      | [Q2](OPEN_QUESTIONS.md)                          |
-| G2  | No rate limit on invitation creation; email sent synchronously                             | Any Owner or Admin can trigger unbounded outbound email — abuse vector and deliverability risk                                                                                                                                                                                  | [ADR-023](DECISIONS.md), [ADR-035](DECISIONS.md) |
+| G2  | ~~No rate limit on invitation creation; email sent synchronously~~                         | **Closed 2026-08-18.** The notification already implemented `ShouldQueue`; what was missing was the rate limiter, now 5/min per inviting user                                                                                                                                   | [ADR-023](DECISIONS.md), [ADR-035](DECISIONS.md) |
 | G3  | Nothing guarantees exactly one Owner per organization, and ownership cannot be transferred | An abandoned organization has no recovery path; ownerless organizations are representable                                                                                                                                                                                       | [ADR-020](DECISIONS.md), [ADR-029](DECISIONS.md) |
 | G4  | ~~Organization soft-delete hard-deletes memberships~~                                      | **Closed 2026-08-18.** Memberships and invitations soft-delete with the organization, so a restore is a coherent whole. Individual removals stay hard deletes                                                                                                                   | [ADR-019](DECISIONS.md), [ADR-034](DECISIONS.md) |
 | G5  | No audit log                                                                               | No record of who invited, removed, promoted or deleted what. Once servers exist, no record of who instructed a destructive operation                                                                                                                                            | [ADR-032](DECISIONS.md)                          |
-| G6  | Invitation codes are stored in plaintext                                                   | Database read access yields usable invitation links. Mitigated by the email-match requirement (ADR-009), not eliminated                                                                                                                                                         | [ADR-033](DECISIONS.md)                          |
+| G6  | ~~Invitation codes are stored in plaintext~~                                               | **Closed 2026-08-18.** `code_hash` holds a SHA-256 digest; the plaintext exists only in the emailed link and is never persisted                                                                                                                                                 | [ADR-033](DECISIONS.md)                          |
 | G8  | ~~Production password policy is environment-conditional~~                                  | **Closed 2026-08-18.** The condition is inverted: strict everywhere except in tests, so a misconfigured environment makes development stricter rather than production weaker                                                                                                    | —                                                |
 | G9  | ~~Only the Owner can revoke a member's access~~                                            | **Closed 2026-08-18.** Admins can remove and re-role members ranking below them, so revocation no longer has a bus factor of one                                                                                                                                                | [ADR-028](DECISIONS.md)                          |
 | G10 | ~~The organization's name is in every URL~~                                                | **Withdrawn 2026-08-17 — this was never a real gap.** `EnsureOrganizationMembership` returns one indistinguishable 403 for "no such organization" and "not a member", so a readable handle enables no enumeration                                                               | [ADR-030](DECISIONS.md)                          |
