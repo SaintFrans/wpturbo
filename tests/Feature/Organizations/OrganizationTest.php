@@ -668,3 +668,65 @@ test('switching organizations is what changes the current one', function () {
 
     expect($user->fresh()->current_organization_id)->toEqual($other->id);
 });
+
+test('deleting an organization soft deletes its whole tree', function () {
+    $owner = User::factory()->create();
+    $member = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    $organization->members()->attach($owner, ['role' => OrganizationRole::Owner->value]);
+    $organization->members()->attach($member, ['role' => OrganizationRole::Member->value]);
+    $invitation = $organization->invitations()->create([
+        'email' => 'outsider@example.com',
+        'role' => OrganizationRole::Member,
+        'invited_by' => $owner->id,
+        'expires_at' => now()->addDays(3),
+    ]);
+
+    $this
+        ->actingAs($owner)
+        ->delete(route('organizations.destroy', $organization), ['name' => $organization->name])
+        ->assertRedirect();
+
+    // A restore has to bring back an organization with its members, not an empty shell (ADR-034).
+    $this->assertSoftDeleted('organizations', ['id' => $organization->id]);
+    $this->assertSoftDeleted('organization_members', ['organization_id' => $organization->id, 'user_id' => $owner->id]);
+    $this->assertSoftDeleted('organization_members', ['organization_id' => $organization->id, 'user_id' => $member->id]);
+    $this->assertSoftDeleted('organization_invitations', ['id' => $invitation->id]);
+});
+
+test('removing a member deletes the membership for good', function () {
+    $owner = User::factory()->create();
+    $member = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    $organization->members()->attach($owner, ['role' => OrganizationRole::Owner->value]);
+    $organization->members()->attach($member, ['role' => OrganizationRole::Member->value]);
+
+    $this
+        ->actingAs($owner)
+        ->delete(route('organizations.members.destroy', [$organization, $member]))
+        ->assertRedirect();
+
+    // Individual removal is a deliberate, permission-gated deletion (ADR-019) — and a lingering
+    // row would collide with UNIQUE(organization_id, user_id) if the member were re-invited.
+    $this->assertDatabaseMissing('organization_members', [
+        'organization_id' => $organization->id,
+        'user_id' => $member->id,
+    ]);
+});
+
+test('a removed member can be added again', function () {
+    $owner = User::factory()->create();
+    $member = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    $organization->members()->attach($owner, ['role' => OrganizationRole::Owner->value]);
+    $organization->members()->attach($member, ['role' => OrganizationRole::Member->value]);
+
+    $this->actingAs($owner)->delete(route('organizations.members.destroy', [$organization, $member]));
+
+    $organization->members()->attach($member, ['role' => OrganizationRole::Member->value]);
+
+    expect($member->fresh()->belongsToOrganization($organization))->toBeTrue();
+});

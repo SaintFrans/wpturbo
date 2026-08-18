@@ -37,8 +37,15 @@ low-stakes notification, which is exactly the pattern provisioning will need. Es
 on something that can safely fail, is cheaper than inventing it under pressure when a server
 build is hanging.
 
-G4 must land before `Server` and `Site` exist, because they join the same delete tree and adding
-them to a broken one doubles the work.
+G4 landed first for that reason: `Server` and `Site` join the same delete tree, and adding them to
+a broken one doubles the work.
+
+**One thing G4 surfaced.** `organization_members` carries `UNIQUE(organization_id, user_id)`, so a
+soft-deleted membership would block the same person being added again. That is why individual
+removals — leaving, being removed, cancelling an invitation, pruning an expired one — are
+`forceDelete()`, and only the organization's own deletion soft-deletes the tree. It matches what
+[ADR-019](DECISIONS.md) already said, and there is a test asserting a removed member can be
+re-added.
 
 ### 2 — Audit log (G5)
 

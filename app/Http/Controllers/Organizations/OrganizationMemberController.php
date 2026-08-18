@@ -88,9 +88,10 @@ class OrganizationMemberController extends Controller
 
         abort_if($organization->owner()?->is($user), 403, __('The organization owner cannot be removed.'));
 
+        // Removing one member is an individual, permission-gated deletion (ADR-019).
         $organization->memberships()
             ->where('user_id', $user->id)
-            ->delete();
+            ->forceDelete();
 
         if ($user->isCurrentOrganization($organization)) {
             // Removal is not the member's choice, so they may have just lost their last

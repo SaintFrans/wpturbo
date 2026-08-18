@@ -167,6 +167,11 @@ the same out-of-band verification ADR-029 specifies, and it is far too rare to j
 - `Membership` and `OrganizationInvitation` gain `SoftDeletes`; every query touching them must
   keep excluding trashed rows, which Eloquent does by default — the risk is
   `withTrashed()` creeping into a query that should not have it.
+- **Individual removals stay hard deletes**, which ADR-019 already required and which
+  implementation showed is also load-bearing: `organization_members` has
+  `UNIQUE(organization_id, user_id)`, so a lingering soft-deleted row would stop the same person
+  from ever being re-added. Leaving, being removed, cancelling an invitation and pruning an
+  expired one all use `forceDelete()`.
 - Handle retirement is unaffected: `organization_handles` was already permanent and independent
   of soft-delete state.
 - **The audit record of a deletion must not be deleted with it** — see

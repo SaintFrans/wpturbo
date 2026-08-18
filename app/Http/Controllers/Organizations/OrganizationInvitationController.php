@@ -52,7 +52,9 @@ class OrganizationInvitationController extends Controller
 
         Gate::authorize('cancelInvitation', $organization);
 
-        $invitation->delete();
+        // Cancelling one invitation is a deliberate, permission-gated removal, so it is a hard
+        // delete. Only deleting the whole organization soft-deletes its tree (ADR-019, ADR-034).
+        $invitation->forceDelete();
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Invitation cancelled.')]);
 
@@ -89,7 +91,7 @@ class OrganizationInvitationController extends Controller
      */
     public function decline(RespondToOrganizationInvitationRequest $request, OrganizationInvitation $invitation): RedirectResponse
     {
-        $invitation->delete();
+        $invitation->forceDelete();
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Invitation declined.')]);
 

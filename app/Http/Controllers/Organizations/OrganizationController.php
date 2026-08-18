@@ -110,9 +110,10 @@ class OrganizationController extends Controller
             ? $user->fallbackOrganization($organization)
             : null;
 
+        // Leaving is an individual act, so the membership goes for good (ADR-019).
         $organization->memberships()
             ->where('user_id', $user->id)
-            ->delete();
+            ->forceDelete();
 
         if ($fallbackOrganization) {
             $user->switchOrganization($fallbackOrganization);
@@ -142,6 +143,8 @@ class OrganizationController extends Controller
                     $ensureUserHasOrganization->handle($affectedUser, $organization),
                 ));
 
+            // The whole tree soft-deletes together, so a restore is a coherent organization
+            // rather than an empty shell (ADR-034). Audit entries deliberately stay outside it.
             $organization->invitations()->delete();
             $organization->memberships()->delete();
             $organization->delete();

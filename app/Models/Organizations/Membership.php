@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Pivot;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
 /**
@@ -22,6 +23,8 @@ use Illuminate\Support\Carbon;
 #[Fillable(['organization_id', 'user_id', 'role'])]
 class Membership extends Pivot
 {
+    use SoftDeletes;
+
     /**
      * The table associated with the model.
      *

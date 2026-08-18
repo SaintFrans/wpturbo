@@ -54,14 +54,22 @@ class AppServiceProvider extends ServiceProvider
             app()->isProduction(),
         );
 
-        Password::defaults(fn (): ?Password => app()->isProduction()
-            ? Password::min(12)
+        /*
+         * Strict everywhere except in tests (G8).
+         *
+         * This used to be keyed on `isProduction()`, which fails open: a misconfigured APP_ENV
+         * silently removed the policy from production. Inverting it means the same mistake makes
+         * local development stricter instead — and `uncompromised()` calls an external service,
+         * which is the one thing a test suite cannot depend on.
+         */
+        Password::defaults(fn (): ?Password => app()->runningUnitTests()
+            ? null
+            : Password::min(12)
                 ->mixedCase()
                 ->letters()
                 ->numbers()
                 ->symbols()
-                ->uncompromised()
-            : null,
+                ->uncompromised(),
         );
     }
 }
