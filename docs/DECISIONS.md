@@ -26,6 +26,73 @@ Format:
 
 ---
 
+## ADR-036 — Retention: 30 days for deleted organizations, 24 months for audit entries
+
+**2026-08-18** · **Status**: Accepted. Resolves Q14; completes
+[ADR-032](#adr-032--an-append-only-audit-log-built-now-while-there-are-five-events) and
+[ADR-034](#adr-034--deleting-an-organization-soft-deletes-its-whole-tree-restore-is-manual).
+
+**Decision** — Four retention rules, each with a different reason:
+
+| Data                                                               | Kept          | Then                             |
+| ------------------------------------------------------------------ | ------------- | -------------------------------- |
+| Soft-deleted organizations, with their memberships and invitations | 30 days       | Hard-deleted by a scheduled task |
+| Audit entries                                                      | 24 months     | Deleted                          |
+| `organization_handles`                                             | Indefinitely  | Never removed                    |
+| Invoices and payment records                                       | Not held here | Stripe's problem                 |
+
+**Alternatives** — Keep everything indefinitely, which is what the code does today; 12 months for
+audit entries with the personal fields pseudonymised afterwards, which was the recommendation
+before NIS2 turned out to apply.
+
+**Why there is a number at all.** There is no statutory maximum. The GDPR sets a principle rather
+than a period — data may be kept only as long as it is necessary for the purpose it was collected
+for, and the controller has to determine and justify that themselves. So the obligation is not to
+stay under a limit; it is to have an answer. This is that answer.
+
+**30 days for deleted organizations**, because soft-delete is a recovery window and not an
+archive. [ADR-034](#adr-034--deleting-an-organization-soft-deletes-its-whole-tree-restore-is-manual)
+makes restore an operator procedure; 30 days is longer than anyone takes to notice they deleted
+the wrong thing, and short enough to defend as data minimisation. Note what is being kept in the
+meantime: the organization's name, its handle history, its memberships, and the email address of
+everyone ever invited.
+
+**24 months for audit entries, driven by NIS2.** The Cyberbeveiligingswet took effect on
+15 August 2026 and names managed service providers and hosting providers explicitly. This product
+is one, and it has been established that it falls in scope. That changes the audit log from a
+transparency feature into part of the zorgplicht: the reporting duty runs at 24 hours, 72 hours
+and one month, and none of those is meetable if the platform cannot reconstruct what happened.
+Twelve months was the recommendation before that was known; two years covers an incident found
+late and an audit of the year before it.
+
+**Pseudonymising instead of deleting was rejected.** Under NIS2 the useful question in an incident
+is _who_, so stripping the actor is exactly the wrong reduction. Over a 24-month window the
+complexity buys little, and a clean delete is easier to prove than a partial scrub.
+
+**Handles are never removed** because they hold no personal data and are the only thing preventing
+a stale link resolving to a different tenant ([ADR-006](#adr-006--slug-uniqueness-includes-soft-deleted-teams)).
+
+**Consequences**
+
+- A scheduled task hard-deletes organizations soft-deleted more than 30 days ago, and audit
+  entries older than 24 months. Neither exists yet; `routes/console.php` currently prunes only
+  expired invitations.
+- **Audit entries survive the organization's purge.** They are not part of the tree ADR-034
+  deletes, so the record of a deletion outlives the deleted thing by up to 24 months.
+- **The 30-day rule assumes no financial records live here.** Billing runs through Stripe, which
+  holds what the seven-year fiscal retention obligation covers. If invoice data is ever stored in
+  this application, this ADR is wrong and the purge needs an exception before that data arrives —
+  not after.
+- These periods are a choice, not a legal maximum, so they must appear in whatever privacy
+  statement and processor agreement the first customer gets. There are no customers yet; the
+  numbers are recorded here so the agreement can be written against something.
+- **This ADR covers retention only.** NIS2's other obligations — registration with the NCSC, an
+  incident response process, supply-chain requirements, non-delegable board responsibility — are
+  organisational and are not addressed by any decision in this log. See
+  [SECURITY.md](SECURITY.md) §1.
+
+---
+
 ## ADR-035 — Laravel Cloud is the deployment target
 
 **2026-08-18** · **Status**: Accepted. Closes the production requirement
@@ -104,9 +171,9 @@ the same out-of-band verification ADR-029 specifies, and it is far too rare to j
   of soft-delete state.
 - **The audit record of a deletion must not be deleted with it** — see
   [ADR-032](#adr-032--an-append-only-audit-log-built-now-while-there-are-five-events).
-- **Retention is deliberately not decided.** Soft-deleted organizations accumulate forever, which
-  is a privacy and data-minimisation question rather than a security one. Recorded as
-  [Q14](OPEN_QUESTIONS.md); settle it before the first real customer, not before the first commit.
+- **Retention is 30 days.** Soft-deleted organizations would otherwise accumulate forever, which
+  is a privacy and data-minimisation question rather than a security one. Settled in
+  [ADR-036](#adr-036--retention-30-days-for-deleted-organizations-24-months-for-audit-entries): 30 days, then a hard delete.
 
 ---
 
@@ -182,10 +249,19 @@ authorisation story, shown to customers, that must survive the deletion of the t
 — a general-purpose activity log built around polymorphic relations to live records is the wrong
 shape for "this organization was deleted".
 
+**NIS2 changed why this is built, after it was decided.** It was accepted as a product and
+hygiene decision. It has since been established that the Cyberbeveiligingswet applies to this
+platform, which makes reconstructing an incident an obligation with a 24-hour clock on it rather
+than a nice-to-have. The design does not change; the priority and the retention period do — see
+[ADR-036](#adr-036--retention-30-days-for-deleted-organizations-24-months-for-audit-entries).
+
 **Consequences**
 
 - Entries carry `organization_id` and are read through the organization relationship, like every
   other tenant-owned resource ([SECURITY.md](SECURITY.md) §5 rule 1).
+- **Owners and Admins read their own organization's log in the UI**, and the same table serves
+  internal incident and support work. One record, two audiences — which is why entries name what
+  was done rather than dumping payloads.
 - **Append-only is a convention, not a database guarantee.** The model exposes no update or delete
   path and nothing in the application writes one; enforcing it properly needs database privileges
   or triggers, which is a deployment concern and out of scope here. Stated so nobody reads more
@@ -197,8 +273,7 @@ shape for "this organization was deleted".
   Every renderer must handle that.
 - Entries record what was done, never the contents of what was done. Server credentials, agent
   tokens and invitation codes never reach this table.
-- **Retention is not decided** — the same question as ADR-034's, recorded together as
-  [Q14](OPEN_QUESTIONS.md).
+- **Retention is 24 months**, driven by NIS2 rather than by preference — see [ADR-036](#adr-036--retention-30-days-for-deleted-organizations-24-months-for-audit-entries).
 
 ---
 

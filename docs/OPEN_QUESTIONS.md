@@ -130,32 +130,3 @@ before `Site` lands, that hedge is the thing to reconsider first.
 
 **Relevant when:** any resource query on `Site`, `Server`, `Client` or `Domain` is written; any
 request from a customer to restrict what a member can see.
-
----
-
-## Q14 — Retention for soft-deleted organizations and audit entries
-
-**Status:** Open. Deliberately deferred by [ADR-034](DECISIONS.md) and [ADR-032](DECISIONS.md).
-Not blocking; settle before the first real customer.
-
-Both decisions keep data forever, and neither says for how long that is acceptable:
-
-- A soft-deleted organization keeps its name, handle history, memberships and invitations
-  indefinitely, including the email addresses of everyone who was ever invited.
-- Audit entries outlive the organization they describe, by design — otherwise the record of a
-  deletion disappears with the deletion.
-
-That is a privacy and data-minimisation question, not a security one, and the two pull in
-opposite directions: an audit log is worth less the sooner it is pruned, while personal data is a
-liability the longer it is kept. A defensible answer probably treats them separately — purge
-soft-deleted organizations after a window, keep audit entries longer but strip or pseudonymise
-the personal fields.
-
-**What must be settled before answering:** whether any of this falls under a retention obligation
-that is not ours to choose, and what an operator restore ([ADR-029](DECISIONS.md),
-[ADR-034](DECISIONS.md)) realistically needs to still find.
-
-**Relevant when:** the first real customer, a privacy review, or any feature that surfaces
-deleted data.
-
----
