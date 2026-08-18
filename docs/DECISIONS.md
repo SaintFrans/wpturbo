@@ -26,6 +26,182 @@ Format:
 
 ---
 
+## ADR-035 — Laravel Cloud is the deployment target
+
+**2026-08-18** · **Status**: Accepted. Closes the production requirement
+[ADR-023](#adr-023--invitation-emails-are-rate-limited-and-queued) left open.
+
+**Decision** — The control plane is deployed on Laravel Cloud. Its managed queue worker and
+scheduler are what ADR-023 needed and never had, so queued mail, the daily invitation prune, and
+later the agent's outbound work all become configuration rather than host administration.
+
+**Alternatives** — A VPS managed with Forge or Ploi, which is tooling this team already uses
+daily.
+
+**Why** — The control plane is not the heavy infrastructure in this product; the customers'
+servers are. Running our own host to save a modest amount per month means the platform that
+manages other people's uptime has an uptime problem of its own to solve first, with no revenue
+attached to solving it. Managed workers also remove a specific failure mode that would otherwise
+be invisible: a supervisor process that dies silently and leaves invitations queued forever.
+
+The Forge/Ploi option was genuinely close, and the deciding factor was not capability but
+attention. Every hour spent on our own host is an hour not spent on the agent, which is the part
+customers are actually paying for.
+
+**Stated cost.** Higher monthly spend than a VPS, and the control plane — including the database
+holding every customer's server credentials once those exist — lives with a third party. That
+concentration is worth naming: it does not change the threat model in
+[SECURITY.md](SECURITY.md) §1, which already places a malicious platform operator out of scope,
+but it widens who "operator" means.
+
+**Consequences**
+
+- ADR-023 becomes fully implementable: rate limiter, `ShouldQueue` on the invitation
+  notification, and a worker that exists.
+- The scheduled invitation prune in `routes/console.php` gets a real scheduler.
+- **This does not decide where NATS runs.** [Q2](OPEN_QUESTIONS.md) must still settle the
+  transport, and "the control plane is on Laravel Cloud" is an input to that question, not an
+  answer to it. Agents connect outbound to something, and what that something is remains open.
+- Environment configuration moves to Cloud, which makes [G8](SECURITY.md) — a password policy
+  keyed on `APP_ENV` — both easier to get right and easier to get wrong from a dashboard.
+
+---
+
+## ADR-034 — Deleting an organization soft-deletes its whole tree; restore is manual
+
+**2026-08-18** · **Status**: Accepted. Implements
+[ADR-019](#adr-019--resources-belong-directly-to-their-team-cross-team-sharing-is-deferred)'s
+deletion clause; closes [G4](SECURITY.md).
+
+**Decision** — `OrganizationController::destroy` soft-deletes memberships and invitations
+alongside the organization, rather than hard-deleting them first. Owned resources join that set
+as they are built. There is **no restore button**: recovery is an operator procedure, like
+[ADR-029](#adr-029--recovering-an-abandoned-organization-is-a-manual-documented-procedure)'s
+ownership transfer.
+
+**Alternatives** — Add a retention window with automatic purge; drop soft-delete altogether and
+delete for real.
+
+**Why** — Today the asymmetry makes soft-delete worse than useless: the organization row survives
+while its memberships do not, so restoring it produces something with no members and no owner —
+an artefact nobody can reach or clean up. Either the tree survives together or nothing should.
+
+Dropping soft-delete was the honest alternative and was rejected for one reason: deletion here is
+irreversible destruction of a tenant's history at a moment when the person clicking has typed the
+organization's name to confirm and may still be wrong. Keeping the rows costs almost nothing and
+buys a recovery path that a support conversation can actually use.
+
+**No restore UI** because a restore is exactly as consequential as a takeover: it puts data back
+under someone's control, and the person asking is often the person who deleted it. That deserves
+the same out-of-band verification ADR-029 specifies, and it is far too rare to justify a screen.
+
+**Consequences**
+
+- `Membership` and `OrganizationInvitation` gain `SoftDeletes`; every query touching them must
+  keep excluding trashed rows, which Eloquent does by default — the risk is
+  `withTrashed()` creeping into a query that should not have it.
+- Handle retirement is unaffected: `organization_handles` was already permanent and independent
+  of soft-delete state.
+- **The audit record of a deletion must not be deleted with it** — see
+  [ADR-032](#adr-032--an-append-only-audit-log-built-now-while-there-are-five-events).
+- **Retention is deliberately not decided.** Soft-deleted organizations accumulate forever, which
+  is a privacy and data-minimisation question rather than a security one. Recorded as
+  [Q14](OPEN_QUESTIONS.md); settle it before the first real customer, not before the first commit.
+
+---
+
+## ADR-033 — Invitation codes are stored hashed
+
+**2026-08-18** · **Status**: Accepted. Amends
+[ADR-009](#adr-009--the-invitation-code-alone-does-not-grant-access); closes
+[G6](SECURITY.md).
+
+**Decision** — `organization_invitations.code` becomes `code_hash`, holding a SHA-256 digest of
+the code. The plaintext exists only in the URL that goes out by email; the application looks an
+invitation up by hashing the incoming value. "Resend" issues a **new** code and invalidates the
+old one, because the old one can no longer be recovered.
+
+**Alternatives** — Leave it in plaintext, relying on ADR-009's email match; encrypt reversibly so
+support can still retrieve the link.
+
+**Why** — An invitation code is an access credential, and [SECURITY.md](SECURITY.md) §5 already
+requires credentials to be encrypted at rest. Plaintext means a database read yields working
+invitation links for every pending invitation at once. ADR-009's requirement that the invitee also
+control the mailbox is a real second factor and it is why this is a gap rather than a hole — but
+"mitigated" is not "closed", and this is a two-line change.
+
+**Hashing rather than encrypting**, because reversible storage protects against a stolen database
+dump and not against anything with application access, which is a materially weaker guarantee for
+the same work. SHA-256 rather than bcrypt because the value must be _looked up_, not verified
+against a known row, and 64 random characters have far more entropy than any password — the slow
+hashing that protects weak secrets buys nothing here.
+
+**Stated cost.** An invitation link can never be shown again — not in the UI, not by an operator
+reading the database, not for support. Resending means issuing a new link and killing the old one.
+That is stricter than today and, on reflection, the behaviour we would want anyway: a "resend"
+that revives an old link leaves two valid credentials in two inboxes.
+
+**Consequences**
+
+- The route key is no longer a plain column. Binding resolves by hashing the incoming segment,
+  so `getRouteKeyName()` cannot carry it alone.
+- `UniqueOrganizationInvitation` and the prune job work on the hash; neither reads the plaintext.
+- Any future invite-style token — server enrolment in [Q2](OPEN_QUESTIONS.md) especially —
+  follows this shape rather than inventing its own.
+- Existing rows cannot be migrated, since the plaintext cannot be recovered from itself in a
+  meaningful way. There is no production data; local databases are rebuilt.
+
+---
+
+## ADR-032 — An append-only audit log, built now while there are five events
+
+**2026-08-18** · **Status**: Accepted. Closes [G5](SECURITY.md).
+
+**Decision** — One append-only table records who did what, to whom, in which organization, when
+and from where. It is populated now with membership events — invite, cancel invitation, accept,
+remove member, change role, delete organization, transfer ownership — and its shape is chosen for
+the server operations that will follow. Owners and Admins can read their own organization's log;
+nobody can edit or delete an entry through the application.
+
+**Alternatives** — Design the shape now and build later; log only membership changes without
+regard for what comes next; adopt an activity-log package; do nothing yet.
+
+**Why the timing rather than the feature.** Nobody argues against an audit log; the question is
+when. Right now there are five auditable actions and adding the log means touching five call
+sites. Once servers exist there are dozens, each destructive, and retrofitting means finding every
+one of them — with no way to tell which were missed, because a missing audit entry looks exactly
+like an action that never happened.
+
+[ADR-028](#adr-028--admins-manage-members-below-their-own-role) made this sharper: membership
+changes are no longer the Owner's exclusive act, so "who removed this person" now has more than
+one possible answer and no record. [ADR-029](#adr-029--recovering-an-abandoned-organization-is-a-manual-documented-procedure)
+step 5 already assumes a record exists.
+
+**A package was rejected** because this is not a debugging aid. It is tenant-scoped data with an
+authorisation story, shown to customers, that must survive the deletion of the things it describes
+— a general-purpose activity log built around polymorphic relations to live records is the wrong
+shape for "this organization was deleted".
+
+**Consequences**
+
+- Entries carry `organization_id` and are read through the organization relationship, like every
+  other tenant-owned resource ([SECURITY.md](SECURITY.md) §5 rule 1).
+- **Append-only is a convention, not a database guarantee.** The model exposes no update or delete
+  path and nothing in the application writes one; enforcing it properly needs database privileges
+  or triggers, which is a deployment concern and out of scope here. Stated so nobody reads more
+  assurance into it than exists.
+- **An organization's entries outlive the organization.** Deleting a tenant must not delete the
+  record of who deleted it, which means these rows are not part of ADR-034's soft-delete tree and
+  the foreign key must tolerate a soft-deleted parent.
+- The actor may be null: operator actions under ADR-029, and later the agent, are not users.
+  Every renderer must handle that.
+- Entries record what was done, never the contents of what was done. Server credentials, agent
+  tokens and invitation codes never reach this table.
+- **Retention is not decided** — the same question as ADR-034's, recorded together as
+  [Q14](OPEN_QUESTIONS.md).
+
+---
+
 ## ADR-031 — Tenant routes sit behind a literal `org/` segment
 
 **2026-08-17** · **Status**: Accepted. Amends

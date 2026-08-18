@@ -8,7 +8,36 @@ by accident while building something adjacent.
 `CLAUDE.md`. When a question is answered, move it to
 [DECISIONS.md](DECISIONS.md) as an ADR and delete it here.
 
-_Last reviewed: 2026-08-17._
+_Last reviewed: 2026-08-18._
+
+---
+
+## Q2 — Agent identity, enrolment and authorisation
+
+**Status:** Open. Blocks all agent work. Nothing is implemented.
+
+Before a single line of the Go agent or its control-plane counterpart is written:
+
+1. **Enrolment** — how does a new server prove which tenant it belongs to on first
+   connection? A one-time token, a signed bootstrap file, mutual TLS, something else?
+2. **Identity** — what is an agent's durable identity, and how is it revoked when a server
+   is decommissioned or a customer leaves?
+3. **Credential rotation** — how are agent credentials rotated, and what happens to a server
+   that is offline across a rotation?
+4. **NATS subject design and isolation** — how are subjects namespaced per tenant, and what
+   enforces that agent A cannot subscribe to tenant B's subjects? This is the tenant
+   isolation boundary of the whole system; getting it wrong exposes every customer to every
+   other customer.
+5. **Command authorisation** — the agent executes privileged operations on a customer's
+   server. What proves an instruction genuinely originated from an authorised control-plane
+   action, rather than from anything else that reached the message bus?
+6. **Result handling** — how do results, logs and failures flow back, and what stops a
+   compromised agent from writing into another tenant's records?
+
+Each of these is a security decision, so each needs an entry in
+[SECURITY.md](SECURITY.md) and an ADR before implementation.
+
+**Relevant when:** any work on the agent, NATS, provisioning or server enrolment begins.
 
 ---
 
@@ -104,31 +133,29 @@ request from a customer to restrict what a member can see.
 
 ---
 
-## Q2 — Agent identity, enrolment and authorisation
+## Q14 — Retention for soft-deleted organizations and audit entries
 
-**Status:** Open. Blocks all agent work. Nothing is implemented.
+**Status:** Open. Deliberately deferred by [ADR-034](DECISIONS.md) and [ADR-032](DECISIONS.md).
+Not blocking; settle before the first real customer.
 
-Before a single line of the Go agent or its control-plane counterpart is written:
+Both decisions keep data forever, and neither says for how long that is acceptable:
 
-1. **Enrolment** — how does a new server prove which tenant it belongs to on first
-   connection? A one-time token, a signed bootstrap file, mutual TLS, something else?
-2. **Identity** — what is an agent's durable identity, and how is it revoked when a server
-   is decommissioned or a customer leaves?
-3. **Credential rotation** — how are agent credentials rotated, and what happens to a server
-   that is offline across a rotation?
-4. **NATS subject design and isolation** — how are subjects namespaced per tenant, and what
-   enforces that agent A cannot subscribe to tenant B's subjects? This is the tenant
-   isolation boundary of the whole system; getting it wrong exposes every customer to every
-   other customer.
-5. **Command authorisation** — the agent executes privileged operations on a customer's
-   server. What proves an instruction genuinely originated from an authorised control-plane
-   action, rather than from anything else that reached the message bus?
-6. **Result handling** — how do results, logs and failures flow back, and what stops a
-   compromised agent from writing into another tenant's records?
+- A soft-deleted organization keeps its name, handle history, memberships and invitations
+  indefinitely, including the email addresses of everyone who was ever invited.
+- Audit entries outlive the organization they describe, by design — otherwise the record of a
+  deletion disappears with the deletion.
 
-Each of these is a security decision, so each needs an entry in
-[SECURITY.md](SECURITY.md) and an ADR before implementation.
+That is a privacy and data-minimisation question, not a security one, and the two pull in
+opposite directions: an audit log is worth less the sooner it is pruned, while personal data is a
+liability the longer it is kept. A defensible answer probably treats them separately — purge
+soft-deleted organizations after a window, keep audit entries longer but strip or pseudonymise
+the personal fields.
 
-**Relevant when:** any work on the agent, NATS, provisioning or server enrolment begins.
+**What must be settled before answering:** whether any of this falls under a retention obligation
+that is not ours to choose, and what an operator restore ([ADR-029](DECISIONS.md),
+[ADR-034](DECISIONS.md)) realistically needs to still find.
+
+**Relevant when:** the first real customer, a privacy review, or any feature that surfaces
+deleted data.
 
 ---
