@@ -26,6 +26,44 @@ Format:
 
 ---
 
+## ADR-037 — Every member sees everything in their organization; visibility is not scoped
+
+**2026-08-18** · **Status**: Accepted. Resolves [Q13](OPEN_QUESTIONS.md) (question removed).
+
+**Decision** — Every member of an organization continues to see every `Client`, `Server` and
+`Site` it owns. There is no per-member or per-client visibility restriction, now or as a near-term
+plan. What varies by role is capability, never visibility: as `Client`, `Server` and `Site` are
+built, destructive and sensitive actions on them (`site:delete`, `client:delete`,
+`server:delete`, …) become new `OrganizationPermission` cases, mapped per role exactly like
+`member:remove` and `organization:delete` are today.
+
+**Alternatives** — Scoping a membership to a subset of clients, the "traceable shape" Q13 left open
+if the need ever appeared; a general visibility/sharing grant table, the RunCloud shape
+[ADR-019](#adr-019--resources-belong-directly-to-their-team-cross-team-sharing-is-deferred)
+already rejected for ownership.
+
+**Why** — The need this would answer — an agency wanting to keep a freelancer or junior off a
+sensitive client — has not appeared, and what agencies actually ask for is narrower: stopping the
+wrong person from *deleting* a site or a client, not hiding it from their dashboard. That is a
+capability question, and the platform already has a mechanism for it
+([ADR-005](#adr-005--permissions-are-an-enum-decoupled-from-roles),
+[ADR-028](#adr-028--admins-manage-members-below-their-own-role)). Building a visibility layer to
+answer a capability need would be exactly the premature abstraction ADR-019 already warned
+against, aimed at the wrong problem besides.
+
+**Consequences**
+
+- `Client::query()`, `Server::query()` and `Site::query()` are scoped by `organization_id` alone,
+  the same as every other tenant-owned table ([SECURITY.md](SECURITY.md) §5 rule 1). No scope
+  helper, no membership indirection.
+- New destructive or sensitive actions on these entities are added to `OrganizationPermission` as
+  each entity is built, not deferred to a future visibility feature.
+- This closes Q13 for good, not provisionally. If a real customer need for restricted visibility
+  appears later, that is a new ADR weighing a new, concrete requirement — not a reopening of this
+  one.
+
+---
+
 ## ADR-036 — Retention: 30 days for deleted organizations, 24 months for audit entries
 
 **2026-08-18** · **Status**: Accepted. Resolves Q14; completes
@@ -621,7 +659,7 @@ link is not confused; they simply cannot tell in advance from the URL alone.
   thirty-ish character alphabet, a collision is a formality, but the retry is one line and makes
   the guarantee absolute rather than probabilistic.
 - Existing local databases must be rebuilt. There is no production data, so no backfill migration
-  is written — see [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md).
+  is written.
 
 ---
 
@@ -741,7 +779,7 @@ The needs it would serve are better served by what already exists or is already 
 grouping by `Client` (ADR-017), and capability by `OrganizationRole` (ADR-005). The one need
 neither covers — restricting a member to a subset of resources — is a visibility problem, and
 the traceable path for it is scoping a membership to a set of clients, not a second grouping
-entity. That remains undecided and is not implied here — see [Q13](OPEN_QUESTIONS.md).
+entity. That remained undecided at the time — resolved by [ADR-037](#adr-037--every-member-sees-everything-in-their-organization-visibility-is-not-scoped).
 
 **Why zero organizations is not a valid state.** A user's last membership can disappear
 without their involvement: an owner removes them, or the organization is deleted. Two
@@ -760,9 +798,9 @@ against a tenant that might not be there. The auto-create keeps ADR-004's actual
 
 **Consequences**
 
-- The full rename map, file inventory, semantic changes and execution order are in
-  [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md). This ADR records _why_; that document
-  records _what to change_.
+- The full rename map, file inventory, semantic changes and execution order were tracked in a
+  now-deleted execution plan; all six phases landed and are folded into ARCHITECTURE.md and
+  DATA_MODEL.md. This ADR records _why_.
 - **ADR-004 is superseded.** `is_personal` and `personalTeam()` are gone. Code may still
   assume a current organization resolves for any authenticated user — that invariant is
   preserved, by different means.
@@ -784,8 +822,6 @@ against a tenant that might not be there. The auto-create keeps ADR-004's actual
 - ADR-005, ADR-006, ADR-007, ADR-008, ADR-009, ADR-019, ADR-020 and ADR-023 are unaffected in
   substance by _this_ entry. They are renamed, not reconsidered — though ADR-005 is later
   amended by ADR-028, and ADR-006/007/008 by ADR-027.
-- Two questions this creates about future social login are recorded as
-  [Q11 and Q12](OPEN_QUESTIONS.md) rather than answered here.
 - **Do this before `Site`, `Server` and `Client` exist.** Today the rename touches roughly 90
   files across one fully tested feature, with no production data, so the migrations are
   rewritten rather than stacked. Each new domain multiplies that.

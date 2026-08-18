@@ -2,9 +2,11 @@
 
 _Last verified against the codebase: 2026-08-18._
 
-Everything decided **up to ADR-031** is implemented. [ADR-032](DECISIONS.md) through
-[ADR-036](DECISIONS.md) are decided and not yet built — they are the answers to gaps G2, G4, G5
-and G6 in §4, and each gap says which ADR settles it.
+Everything decided up to and including [ADR-034](DECISIONS.md) is implemented — the soft-delete
+tree (G4) and the fail-safe password policy (G8) closed on 2026-08-18. [ADR-032](DECISIONS.md),
+[ADR-033](DECISIONS.md), [ADR-035](DECISIONS.md) and [ADR-036](DECISIONS.md) are decided and not
+yet built — they are the answers to gaps G2, G5 and G6 in §4, and each gap says which ADR settles
+it. [ADR-037](DECISIONS.md) (Q13) needs no implementation: it confirms current query behaviour.
 
 ## 0. The rule
 
@@ -212,8 +214,7 @@ invitations to existing members are rejected (`UniqueOrganizationInvitation`); c
 invitation verifies it belongs to the organization in the URL before the policy check.
 
 `invitations.accept` and `invitations.decline` are the only organization-touching routes outside
-the `org/` prefix, because the recipient is not a member yet. [Q11](OPEN_QUESTIONS.md) records what
-social login would do to the email-match requirement.
+the `org/` prefix, because the recipient is not a member yet.
 
 ## 4. Known gaps
 

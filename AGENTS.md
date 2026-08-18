@@ -337,12 +337,13 @@ Four more decisions are accepted and equally unimplemented:
   `GeneratesHandle` for `Site`, `Server` and `Client`.
 - **Recovering an abandoned organization is a manual, documented procedure**
   ([ADR-029](docs/DECISIONS.md)), not a self-service takeover.
-- **Per-member resource visibility is deliberately still open** ([Q13](docs/OPEN_QUESTIONS.md)).
-  Every member sees everything in their organization. If you are about to write a resource query
-  for `Site` or `Server`, read Q13 first — that is the moment the assumption sets.
+- **Every member sees everything in their organization** ([ADR-037](docs/DECISIONS.md)).
+  Visibility is not scoped by client or membership; only capability varies by role, via
+  `OrganizationPermission`. Extend that enum with new cases (`site:delete`, `client:delete`, …)
+  as each entity is built, rather than reaching for a visibility layer.
 
-**This is implemented.** The rename and the handle change landed on 2026-08-17
-(all six phases of [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md)); `composer
+**This is implemented.** The rename and the handle change landed on 2026-08-17 (all six phases,
+recorded in [ADR-025](docs/DECISIONS.md) through [ADR-031](docs/DECISIONS.md)); `composer
 ci:check` is green on 120 tests. **Nothing from ADR-025 through ADR-031 is left unimplemented.**
 
 - **Admins manage members ranking below their own role** ([ADR-028](docs/DECISIONS.md)) — Members

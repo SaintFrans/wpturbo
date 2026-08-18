@@ -58,16 +58,14 @@ happened.
 It also gives the agent a place to record what it was told to do, which is the fourth thing on the
 critical path.
 
-### 3 — Decide [Q13](OPEN_QUESTIONS.md), then build `Client`, `Server`, `Site`
+### 3 — Build `Client`, `Server`, `Site`
 
-**Q13 must be answered before the first resource query is written, not after.** Every member of an
-organization currently sees everything in it. The moment `Server::query()` and `Site::query()`
-exist, that assumption is baked into every call site, and unpicking it later is the failure
-[ADR-019](DECISIONS.md) quotes a competitor admitting to.
-
-The decision is not whether to build per-member visibility now. It is whether resource queries go
-through a single scope helper from day one — one that may return everything, forever, and cost
-nothing — or whether they do not.
+[Q13](DECISIONS.md) is settled: [ADR-037](DECISIONS.md) confirms every member sees everything in
+their organization. `Server::query()` and `Site::query()` are scoped by `organization_id` alone,
+the same as every other tenant-owned table — no visibility helper, no scope-by-membership
+indirection. What differs by role is capability: destructive actions (`site:delete`,
+`client:delete`, `server:delete`, …) are new `OrganizationPermission` cases, mapped per role
+exactly like the existing ones.
 
 The entities themselves are already designed: [ADR-017](DECISIONS.md) for `Client`,
 [ADR-018](DECISIONS.md) for `Site` and `SiteService`, [ADR-019](DECISIONS.md) for ownership and
@@ -91,7 +89,6 @@ Out of scope for this repository, and the reason for everything above it.
 | **G3** — one-owner constraint and ownership transfer ([ADR-020](DECISIONS.md)) | Real, and needed before paying customers, but it blocks nothing on the agent path. Slot it wherever there is room.                                 |
 | **G12** — incident detection                                                   | Parked with the NIS2 scoping question ([SECURITY.md](SECURITY.md) §1).                                                                             |
 | **G1** — the agent security model                                              | Not a gap to close; it _is_ step 4.                                                                                                                |
-| **[Q11](OPEN_QUESTIONS.md), [Q12](OPEN_QUESTIONS.md)** — social login          | Nothing depends on them until GitHub login is built.                                                                                               |
 | Legal and privacy texts                                                        | Explicitly deferred. The retention periods in [ADR-036](DECISIONS.md) are recorded so the eventual documents have something to be written against. |
 
 ## What would change this order
@@ -99,5 +96,3 @@ Out of scope for this repository, and the reason for everything above it.
 - **A paying customer before the agent exists** moves G3 up immediately: an organization with no
   guaranteed owner and no transfer path is a support problem the moment someone else's money is
   involved.
-- **Answering Q13 with "yes, scope by client"** makes step 3 substantially larger and should then
-  be planned as its own piece rather than folded in with the entities.

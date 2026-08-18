@@ -193,7 +193,6 @@ prefix that touch an organization, for exactly this reason.
 that the authenticated user's email matches the invitation's, case-insensitively. A leaked
 invitation link cannot be redeemed by whoever finds it — they would also need control of the
 invited mailbox. Deliberate; see [SECURITY.md](SECURITY.md) and [ADR-009](DECISIONS.md).
-[Q11](OPEN_QUESTIONS.md) records what social login will do to that requirement.
 
 **Why invitations expire and are pruned.** Three days, with a daily scheduled prune in
 `routes/console.php`. An unbounded pending invitation is a standing grant of access to a tenant,
@@ -282,10 +281,12 @@ When Servers and Sites are added:
 These are consequences of the tenant-isolation rule in [SECURITY.md](SECURITY.md), not independent
 preferences.
 
-**Read [Q13](OPEN_QUESTIONS.md) before writing the first `Site` query.** Every member of an
-organization currently sees everything in it, and the moment resource queries are written that
-assumption sets. Whether a membership can be scoped to a subset of clients is deliberately still
-open.
+**Every member sees everything in their organization, by design** ([ADR-037](DECISIONS.md)).
+`Client`, `Server` and `Site` queries are scoped by `organization_id` alone — no per-member or
+per-client visibility layer. What varies by role is capability, not visibility: destructive or
+sensitive actions (`site:delete`, `client:delete`, `server:delete`, …) are added to
+`OrganizationPermission` as each entity is built, following the existing role→permission model
+(ADR-005, ADR-028), not a new grant table.
 
 Two of the entities coming next are already decided, though not yet built — see
 [ADR-017](DECISIONS.md) and [ADR-018](DECISIONS.md):

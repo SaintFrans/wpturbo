@@ -6,10 +6,8 @@ This document separates **what is built** from **what is intended**. Every secti
 which it is. Intended architecture is written down so decisions are not re-litigated, not
 because it exists.
 
-Two accepted decisions are **not** implemented, and each is flagged where it applies below: the
-implicit organization switch ([ADR-025](DECISIONS.md)) and Admin member management
-([ADR-028](DECISIONS.md)). Status per phase is in
-[ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §1.
+The `Team` → `Organization` rename (ADR-025 through ADR-031) is fully implemented; nothing from
+it is outstanding.
 
 ## 1. System overview
 
