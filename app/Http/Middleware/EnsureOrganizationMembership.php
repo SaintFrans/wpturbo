@@ -14,6 +14,11 @@ class EnsureOrganizationMembership
     /**
      * Handle an incoming request.
      *
+     * Scopes the request to the organization in the URL and nothing more. It deliberately does
+     * **not** persist that organization as the user's current one (ADR-025): a read should not
+     * perform a write, and following a colleague's link used to repoint every other tab. The
+     * stored organization changes only through an explicit switch.
+     *
      * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next, ?string $minimumRole = null): Response
@@ -23,10 +28,6 @@ class EnsureOrganizationMembership
         abort_if(! $user || ! $organization || ! $user->belongsToOrganization($organization), 403);
 
         $this->ensureOrganizationMemberHasRequiredRole($user, $organization, $minimumRole);
-
-        if (! $user->isCurrentOrganization($organization)) {
-            $user->switchOrganization($organization);
-        }
 
         return $next($request);
     }

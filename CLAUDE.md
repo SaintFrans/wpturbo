@@ -342,13 +342,10 @@ Four more decisions are accepted and equally unimplemented:
   Every member sees everything in their organization. If you are about to write a resource query
   for `Site` or `Server`, read Q13 first — that is the moment the assumption sets.
 
-**Most of this is implemented.** The rename and the handle change landed on 2026-08-17
-(phases 1, 2, 4 and 5 of [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md)); `composer
-ci:check` is green on 110 tests. Two phases remain, and until they land the code still does the
-old thing in two specific places:
-
-- visiting a prefixed URL still writes `current_organization_id` (phase 3)
-- Admins still cannot manage members (phase 6)
+**Nearly all of this is implemented.** The rename and the handle change landed on 2026-08-17
+(phases 1–5 of [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md)); `composer ci:check`
+is green on 113 tests. One phase remains: **Admins still cannot manage members** (phase 6,
+[ADR-028](docs/DECISIONS.md), tracked as gap G9).
 
 Do the rest before `Site`, `Server` or `Client` exist; every new domain multiplies the work. The
 plan carries the remaining steps, the security review, and a list of the six things the plan

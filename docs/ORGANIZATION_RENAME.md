@@ -1,6 +1,6 @@
 # `Team` → `Organization` — execution plan
 
-_Written 2026-08-17. **Phases 1, 2, 4 and 5 executed.** Phases 3 and 6 remain._
+_Written 2026-08-17. **Phases 1–5 executed.** Phase 6 remains._
 
 The reasoning is in [ADR-025](DECISIONS.md) through [ADR-029](DECISIONS.md). This document is
 the _what to change_, in an order that can be verified at each step.
@@ -11,10 +11,9 @@ work.
 > **Executed so far.** `Team` is `Organization` everywhere — model, tables, enums, DTOs,
 > middleware, routes, URL segment, frontend types — laid out per [ADR-026](DECISIONS.md), and
 > the URL identifier is a `handle` per [ADR-030](DECISIONS.md), and every tenant route sits
-> behind `org/` per [ADR-031](DECISIONS.md). Suite: 110 passing, `composer ci:check` green.
+> behind `org/` per [ADR-031](DECISIONS.md). Suite: 113 passing, `composer ci:check` green.
 >
-> **Still true of the code, and deliberately so:** visiting a prefixed URL still switches the
-> current organization (phase 3), and Admins still cannot manage members (phase 6).
+> **Still true of the code, and deliberately so:** Admins still cannot manage members (phase 6).
 
 ---
 
@@ -28,7 +27,7 @@ nothing changed, which you lose the moment behaviour changes in the same commit.
 | ----- | ------------------------------------------------------ | ------- | --------------------------------- |
 | 1     | Pure rename, plus the folder move                      | 025/026 | **Done** 2026-08-17               |
 | 2     | Remove `is_personal`, add the auto-create fallback     | 025     | **Done** 2026-08-18               |
-| 3     | Remove the implicit organization switch                | 025     | Open                              |
+| 3     | Remove the implicit organization switch                | 025     | **Done** 2026-08-18               |
 | 4     | Move organization administration inside the URL prefix | 025/031 | **Done** 2026-08-17               |
 | 5     | `slug` → name-seeded, editable `handle`                | 030     | **Done** 2026-08-17, with phase 1 |
 | 6     | Admins manage members below their own role             | 028     | Open                              |
@@ -301,32 +300,34 @@ failed on exactly this.
 
 ## 5. Phase 3 — remove the implicit switch
 
-`EnsureOrganizationMembership` currently writes on read:
+Per [ADR-025](DECISIONS.md). **Done 2026-08-18.**
 
-```php
-if ($request->route('current_team') && ! $user->isCurrentTeam($team)) {
-    $user->switchTeam($team);
-}
-```
+### 5.1 What changed
 
-Remove it. The middleware keeps resolving the organization from the URL, keeps the 403 for
-non-members, and keeps the optional minimum-role check. What it stops doing is persisting
-`current_organization_id`.
+`EnsureOrganizationMembership` no longer calls `switchOrganization()`. It scopes the request to
+the organization in the URL, checks membership, and stops there. `current_organization_id` now
+changes only through `organizations.switch`, which is already a `POST`.
 
-The organization is then scoped **per request** from the URL. Two things must still work, so
-check both:
+`SetOrganizationUrlDefaults` had to change with it, and this is the part that is easy to miss:
+it now prefers **the organization named by the route** over the user's stored one. Viewing
+`/org/b/...` while your current organization is `a` is a normal state now, and every link
+rendered on that page has to point at `b`. Without this the page would render links to `a` and
+navigation would silently jump organizations.
 
-1. `SetOrganizationUrlDefaults` must push the _URL's_ organization into `URL::defaults()` for
-   that request, not the stored one — otherwise links rendered on the page point at the wrong
-   organization.
-2. `current_organization_id` is written on an explicit switch (`organizations.switch`, already
-   a `POST`) and when landing at `/` without a prefix.
+Membership is not checked in that middleware. It only decides which handle link generation fills
+in, and `EnsureOrganizationMembership` aborts before anything reaches the browser.
 
-**Test to add:** a user whose current organization is A visits a URL under organization B, gets
-a 200, and their `current_organization_id` is still A afterwards.
+### 5.2 Tests
 
-This is what stops a shared link from repointing the reader's other tabs — the freelance/agency
-scenario ADR-025 is built around.
+**The suite passed unchanged after removing the switch** — nothing covered it. That is the
+finding, not a convenience. Three tests added:
+
+- visiting another organization's URL leaves `current_organization_id` alone;
+- links rendered under another organization point at that organization (asserts `URL::defaults`
+  followed the URL);
+- an explicit switch is what changes the stored organization.
+
+The first was verified to fail against the old behaviour before being kept.
 
 ---
 
@@ -487,11 +488,7 @@ or the line becomes a claim the file no longer earns.
 
 **Phase 2 — `is_personal`** ✅ done 2026-08-18
 
-**Phase 3 — implicit switch**
-
-- [ ] Switch block removed from the middleware
-- [ ] `SetOrganizationUrlDefaults` verified against the URL's organization
-- [ ] Cross-organization visit test added
+**Phase 3 — implicit switch** ✅ done 2026-08-18
 
 **Phase 4 — routes** ✅ done 2026-08-17, with the `org/` prefix from ADR-031
 

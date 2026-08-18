@@ -626,3 +626,45 @@ test('an owner with a second organization can still not leave the one they own',
         ->delete(route('organizations.leave', $organization))
         ->assertForbidden();
 });
+
+test('visiting another organization does not change the current one', function () {
+    $user = User::factory()->create();
+    $own = $user->fallbackOrganization();
+
+    $other = Organization::factory()->create(['name' => 'Zulu Organization']);
+    $other->members()->attach($user, ['role' => OrganizationRole::Member->value]);
+
+    // A read must not perform a write: following a colleague's link used to repoint every
+    // other tab to their organization (ADR-025).
+    $this
+        ->actingAs($user)
+        ->get(route('dashboard', ['organization' => $other->handle]))
+        ->assertOk();
+
+    expect($user->fresh()->current_organization_id)->toEqual($own->id);
+});
+
+test('links rendered under another organization point at that organization', function () {
+    $user = User::factory()->create();
+    $other = Organization::factory()->create(['name' => 'Zulu Organization']);
+    $other->members()->attach($user, ['role' => OrganizationRole::Member->value]);
+
+    $this->actingAs($user)->get(route('dashboard', ['organization' => $other->handle]));
+
+    // URL::defaults must follow the URL, not the stored organization, or every link on the
+    // page would silently point somewhere else.
+    expect(route('dashboard', absolute: false))->toBe("/org/{$other->handle}/dashboard");
+});
+
+test('switching organizations is what changes the current one', function () {
+    $user = User::factory()->create();
+    $other = Organization::factory()->create(['name' => 'Zulu Organization']);
+    $other->members()->attach($user, ['role' => OrganizationRole::Member->value]);
+
+    $this
+        ->actingAs($user)
+        ->post(route('organizations.switch', $other))
+        ->assertRedirect();
+
+    expect($user->fresh()->current_organization_id)->toEqual($other->id);
+});

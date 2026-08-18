@@ -70,11 +70,10 @@ survives logout, device changes and email links. A user following an invitation 
 phone lands in the right tenant. The cost is a write on every switch; that is acceptable at the
 frequency switching actually happens.
 
-**Visiting a prefixed URL currently writes this column** — `EnsureOrganizationMembership` switches
-the user's current organization on every tenant route. [ADR-025](DECISIONS.md) removes that: the
-URL should scope the request without persisting anything, so following a shared link stops
-repointing the reader's other tabs. Not yet implemented — phase 3 of
-[ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md).
+**Only an explicit switch writes this column.** Visiting `/org/{handle}/…` scopes that request and
+nothing more, so following a colleague's link does not repoint the reader's other tabs
+([ADR-025](DECISIONS.md)). A read performing a write was the problem; `organizations.switch` is a
+`POST` and is the one route that changes it.
 
 ### Organization
 

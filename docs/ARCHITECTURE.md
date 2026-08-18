@@ -172,7 +172,6 @@ GET /org/acme-agency/dashboard
      1. resolve the organization from the {organization} route parameter
      2. abort 403 unless the authenticated user is a member of it
      3. optionally enforce a minimum role (middleware parameter, unused today)
-     4. if it differs from the user's current organization, switch to it
 ```
 
 The 403 in step 2 covers three cases — no user, no such organization, and not a member — and they
