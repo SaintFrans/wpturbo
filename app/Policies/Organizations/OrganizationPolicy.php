@@ -3,6 +3,7 @@
 namespace App\Policies\Organizations;
 
 use App\Enums\Organizations\OrganizationPermission;
+use App\Enums\Organizations\OrganizationRole;
 use App\Models\Organizations\Organization;
 use App\Models\User;
 
@@ -57,33 +58,38 @@ class OrganizationPolicy
     /**
      * Determine whether the user can add a member to the organization.
      */
-    public function addMember(User $user, Organization $organization): bool
+    public function addMember(User $user, Organization $organization, OrganizationRole $role): bool
     {
-        return $user->hasOrganizationPermission($organization, OrganizationPermission::AddMember);
+        return $user->hasOrganizationPermission($organization, OrganizationPermission::AddMember)
+            && $this->outranks($user, $organization, $role);
     }
 
     /**
      * Determine whether the user can update a member's role in the organization.
      */
-    public function updateMember(User $user, Organization $organization): bool
+    public function updateMember(User $user, Organization $organization, OrganizationRole $currentRole, OrganizationRole $newRole): bool
     {
-        return $user->hasOrganizationPermission($organization, OrganizationPermission::UpdateMember);
+        return $user->hasOrganizationPermission($organization, OrganizationPermission::UpdateMember)
+            && $this->outranks($user, $organization, $currentRole)
+            && $this->outranks($user, $organization, $newRole);
     }
 
     /**
      * Determine whether the user can remove a member from the organization.
      */
-    public function removeMember(User $user, Organization $organization): bool
+    public function removeMember(User $user, Organization $organization, OrganizationRole $memberRole): bool
     {
-        return $user->hasOrganizationPermission($organization, OrganizationPermission::RemoveMember);
+        return $user->hasOrganizationPermission($organization, OrganizationPermission::RemoveMember)
+            && $this->outranks($user, $organization, $memberRole);
     }
 
     /**
      * Determine whether the user can invite members to the organization.
      */
-    public function inviteMember(User $user, Organization $organization): bool
+    public function inviteMember(User $user, Organization $organization, OrganizationRole $invitedRole): bool
     {
-        return $user->hasOrganizationPermission($organization, OrganizationPermission::CreateInvitation);
+        return $user->hasOrganizationPermission($organization, OrganizationPermission::CreateInvitation)
+            && $this->outranks($user, $organization, $invitedRole);
     }
 
     /**
@@ -101,6 +107,17 @@ class OrganizationPolicy
     {
         return ! $this->isLastOrganizationFor($user)
             && $user->hasOrganizationPermission($organization, OrganizationPermission::DeleteOrganization);
+    }
+
+    /**
+     * Determine whether the user's role in this organization outranks the given role.
+     *
+     * The role argument is required on every member method on purpose: a call site that forgets
+     * it is a TypeError, not a silent bypass.
+     */
+    protected function outranks(User $user, Organization $organization, OrganizationRole $role): bool
+    {
+        return $user->organizationRole($organization)?->outranks($role) ?? false;
     }
 
     /**

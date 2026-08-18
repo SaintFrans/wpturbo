@@ -52,7 +52,9 @@ class OrganizationMemberController extends Controller
                     'created_at' => $invitation->created_at->toISOString(),
                 ]),
             'permissions' => $request->user()->toOrganizationPermissions($organization),
-            'availableRoles' => OrganizationRole::assignable(),
+            'availableRoles' => OrganizationRole::assignableBy(
+                $request->user()->organizationRole($organization) ?? OrganizationRole::Member,
+            ),
         ]);
     }
 
@@ -61,14 +63,14 @@ class OrganizationMemberController extends Controller
      */
     public function update(UpdateOrganizationMemberRequest $request, Organization $organization, User $user): RedirectResponse
     {
-        Gate::authorize('updateMember', $organization);
-
+        $membership = $organization->memberships()->where('user_id', $user->id)->firstOrFail();
         $newRole = OrganizationRole::from($request->validated('role'));
 
-        $organization->memberships()
-            ->where('user_id', $user->id)
-            ->firstOrFail()
-            ->update(['role' => $newRole]);
+        // Both the member's current role and the role they would gain must rank below the
+        // actor's own, or an Admin could demote a peer or promote someone past themselves.
+        Gate::authorize('updateMember', [$organization, $membership->role, $newRole]);
+
+        $membership->update(['role' => $newRole]);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Member role updated.')]);
 
@@ -80,7 +82,9 @@ class OrganizationMemberController extends Controller
      */
     public function destroy(Organization $organization, User $user, EnsureUserHasOrganization $ensureUserHasOrganization): RedirectResponse
     {
-        Gate::authorize('removeMember', $organization);
+        $membership = $organization->memberships()->where('user_id', $user->id)->firstOrFail();
+
+        Gate::authorize('removeMember', [$organization, $membership->role]);
 
         abort_if($organization->owner()?->is($user), 403, __('The organization owner cannot be removed.'));
 

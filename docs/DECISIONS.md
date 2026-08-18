@@ -204,7 +204,7 @@ better than deciding it under pressure with a customer waiting.
 
 ## ADR-028 — Admins manage members below their own role
 
-**2026-08-17** · **Status**: Accepted. Amends
+**2026-08-17** · **Status**: Accepted, **implemented 2026-08-18**. Amends
 [ADR-005](#adr-005--permissions-are-an-enum-decoupled-from-roles).
 
 **Decision** — `member:add`, `member:update`, `member:remove` and `invitation:create` are granted
@@ -265,8 +265,20 @@ it.
   while email invitations use the second. If that flow never appears, merge them.
 - Tests required, all negative: an Admin cannot remove another Admin, cannot remove the Owner,
   cannot promote anyone to Admin or Owner, cannot invite above Member — and can remove a Member.
-- [SECURITY.md](SECURITY.md) §3 "Privilege boundaries" is rewritten by this; it currently states
-  the opposite.
+- [SECURITY.md](SECURITY.md) §3 "Privilege boundaries" is rewritten by this.
+- **Implementation found a live escalation path this entry did not anticipate.**
+  `CreateOrganizationInvitationRequest` validated the role with `Rule::enum`, which accepts every
+  case including `owner`, while `inviteMember` only asked whether the actor could invite at all.
+  Any Admin could therefore invite a new Owner — before this ADR, not because of it. Verified with
+  a probe test, then closed as part of this change and recorded as G11 in
+  [SECURITY.md](SECURITY.md). It is the sharpest possible illustration of this entry's own point:
+  the escalation path is the _invited role_, not the invite action.
+- `assignable()` is gone; `assignableBy(OrganizationRole $actor)` replaces it. Owner drops out
+  because a role does not outrank itself, so the ADR-005/ADR-020 guarantee now holds by
+  construction instead of by a hardcoded exception.
+- Form requests gained `authorize()` so the base permission is checked before validation.
+  Without it a Member submitting an invitation got a field error about the role rather than a
+  403 — the right outcome for the wrong reason.
 
 ---
 

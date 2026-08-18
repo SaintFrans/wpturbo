@@ -255,7 +255,7 @@ hosting-domain code exists — verify before referencing it. See [README.md](REA
 | [docs/SECURITY.md](docs/SECURITY.md)             | Every task. The rules in §5 apply whether or not the task mentions security |
 
 Scoped guidance: [app/CLAUDE.md](app/CLAUDE.md),
-[app/Http/Controllers/Teams/CLAUDE.md](app/Http/Controllers/Teams/CLAUDE.md),
+[app/Http/Controllers/Organizations/CLAUDE.md](app/Http/Controllers/Organizations/CLAUDE.md),
 [resources/js/CLAUDE.md](resources/js/CLAUDE.md).
 
 ## Working method — follow this for every task
@@ -334,18 +334,19 @@ Four more decisions are accepted and equally unimplemented:
   separate, explicit action that does break existing links. A handle is never reissued —
   uniqueness spans the live column, soft-deleted rows and `organization_handles`. Reuse
   `GeneratesHandle` for `Site`, `Server` and `Client`.
-- **Admins manage members ranking below their own role** ([ADR-028](docs/DECISIONS.md)) —
-  Members only, never another Admin or the Owner, and never inviting above Member.
 - **Recovering an abandoned organization is a manual, documented procedure**
   ([ADR-029](docs/DECISIONS.md)), not a self-service takeover.
 - **Per-member resource visibility is deliberately still open** ([Q13](docs/OPEN_QUESTIONS.md)).
   Every member sees everything in their organization. If you are about to write a resource query
   for `Site` or `Server`, read Q13 first — that is the moment the assumption sets.
 
-**Nearly all of this is implemented.** The rename and the handle change landed on 2026-08-17
-(phases 1–5 of [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md)); `composer ci:check`
-is green on 113 tests. One phase remains: **Admins still cannot manage members** (phase 6,
-[ADR-028](docs/DECISIONS.md), tracked as gap G9).
+**This is implemented.** The rename and the handle change landed on 2026-08-17
+(all six phases of [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md)); `composer
+ci:check` is green on 120 tests. **Nothing from ADR-025 through ADR-031 is left unimplemented.**
+
+- **Admins manage members ranking below their own role** ([ADR-028](docs/DECISIONS.md)) — Members
+  only, never another Admin or the Owner, and never inviting above Member. The bound is on the
+  _role_, not just the action.
 
 Do the rest before `Site`, `Server` or `Client` exist; every new domain multiplies the work. The
 plan carries the remaining steps, the security review, and a list of the six things the plan

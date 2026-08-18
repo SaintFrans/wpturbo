@@ -209,29 +209,33 @@ role to permission set.
 | --------------------- | :---: | :---: | :----: |
 | `organization:update` |  ✅   |  ✅   |   —    |
 | `organization:delete` |  ✅   |   —   |   —    |
-| `member:add`          |  ✅   |   —   |   —    |
-| `member:update`       |  ✅   |   —   |   —    |
-| `member:remove`       |  ✅   |   —   |   —    |
-| `invitation:create`   |  ✅   |  ✅   |   —    |
+| `member:add`          |  ✅   |  ✅¹  |   —    |
+| `member:update`       |  ✅   |  ✅¹  |   —    |
+| `member:remove`       |  ✅   |  ✅¹  |   —    |
+| `invitation:create`   |  ✅   |  ✅¹  |   —    |
 | `invitation:cancel`   |  ✅   |  ✅   |   —    |
+
+¹ Only against a role ranking **strictly below** the actor's own ([ADR-028](DECISIONS.md)).
 
 **Why permissions are separate from roles.** Checks in policies and controllers ask "does this user
 hold `member:remove`?", never "is this user an admin?". Adding a role, or moving a capability
 between roles, is then a one-line change in `OrganizationRole::permissions()` instead of a
 search-and-replace across the codebase.
 
-**Admins currently cannot manage members** — they can grow the organization but cannot change
-anyone's role or remove anyone, so an Admin cannot escalate themselves.
-`OrganizationRole::assignable()` also excludes Owner, so ownership cannot be granted through the
-member-role UI at all.
+**Why Admins can manage Members but nothing above them.** Until [ADR-028](DECISIONS.md) only the
+Owner could revoke access, so an unreachable Owner meant a departing employee kept theirs — the
+safest-looking permission map produced the least safe outcome. Widening it is bounded by one
+comparison, `OrganizationRole::outranks()`, which blocks self-promotion, removing the Owner and
+minting a peer Admin without a special case for each.
 
-**That is being widened, for a security reason.** [ADR-028](DECISIONS.md) grants Admin
-`member:add`, `member:update`, `member:remove` and `invitation:create`, each bounded to roles
-ranking **strictly below the actor's own**. Today only the Owner can revoke access, so an
-unreachable Owner means a departing employee keeps access — the safest-looking permission map
-produces the least safe outcome. The bound lives in `OrganizationPolicy` via
-`OrganizationRole::level()` (Owner 3, Admin 2, Member 1), so the enum keeps reading as a plain
-specification. Not yet implemented — phase 6, tracked as gap G9 in [SECURITY.md](SECURITY.md).
+The bound lives in `OrganizationPolicy`, not in the permission map, so the enum keeps reading as a
+plain specification. **It is applied to the role, not just the action:** `updateMember` checks
+both the member's current role and the role they would gain, and `inviteMember` checks the invited
+role. Checking only the action is what let any Admin invite a new Owner until this landed
+(G11 in [SECURITY.md](SECURITY.md)).
+
+`assignableBy($actor)` returns the roles an actor may hand out. Owner never appears, because a
+role does not outrank itself — ADR-020's transfer flow stays the only route to ownership.
 
 `OrganizationRole::level()` also supports `isAtLeast()`, used by the
 `EnsureOrganizationMembership` middleware's optional minimum-role parameter. That parameter is

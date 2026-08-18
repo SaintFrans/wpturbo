@@ -2,8 +2,8 @@
 
 _Last verified against the codebase: 2026-08-18._
 
-One accepted decision is **not** implemented and is flagged where it applies:
-[ADR-028](DECISIONS.md)'s Admin member management, tracked as **G9**.
+Everything decided is now implemented. The open items are the gaps in §4 and the questions in
+[OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
 ## 0. The rule
 
@@ -136,16 +136,19 @@ similar against a live database.
 
 ### Privilege boundaries
 
-- Admins can update the organization and manage invitations. They cannot change roles, remove
-  members, or delete the organization — so an Admin cannot escalate themselves or lock out the
-  Owner.
-  **Being widened by [ADR-028](DECISIONS.md), not yet implemented.** Admins will be able to add,
-  remove and re-role members, bounded to roles ranking **strictly below their own**: still not
-  another Admin, still not the Owner, still no promotion above their own level. The reason for
-  widening it is itself a security one — see G9. The escalation path that must be closed is the
-  _invited role_, not the invite action.
-- Owner is excluded from `OrganizationRole::assignable()`, so ownership cannot be granted through
-  the member-role UI.
+- **An actor may only affect roles ranking strictly below their own** ([ADR-028](DECISIONS.md)).
+  One comparison — `OrganizationRole::outranks()` — blocks self-promotion, removing the Owner and
+  minting a peer Admin, without a special case for each. In practice: an Admin manages Members and
+  nothing else; the Owner manages Admins and Members.
+- **The bound is on the role, not just the action.** `updateMember` checks both the member's
+  current role and the role they would gain; `inviteMember` checks the invited role. Checking only
+  "may this user invite?" is what left the hole described below.
+- Owner is excluded everywhere because a role does not outrank itself — not even the Owner can
+  hand out Owner. [ADR-020](DECISIONS.md)'s transfer flow remains the only route to ownership,
+  now by construction rather than by exception.
+- Form requests restrict the submitted role to what the actor may assign, and their `authorize()`
+  checks the base permission first, so someone with no business here gets a 403 rather than a
+  field error. The policy is still the control; validation is the shape of the error.
 - The owner cannot be removed (`OrganizationMemberController::destroy`) and cannot leave
   (`OrganizationPolicy::leave`).
 - **A user cannot leave or delete their last organization**, so everyone always retains a tenant.

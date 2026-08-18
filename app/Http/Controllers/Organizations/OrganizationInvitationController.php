@@ -22,11 +22,15 @@ class OrganizationInvitationController extends Controller
      */
     public function store(CreateOrganizationInvitationRequest $request, Organization $organization): RedirectResponse
     {
-        Gate::authorize('inviteMember', $organization);
+        $invitedRole = OrganizationRole::from($request->validated('role'));
+
+        // The escalation path is the invited role, not the invite action: without this an Admin
+        // could invite a peer — or, before ADR-028, an Owner (ADR-028).
+        Gate::authorize('inviteMember', [$organization, $invitedRole]);
 
         $invitation = $organization->invitations()->create([
             'email' => $request->validated('email'),
-            'role' => OrganizationRole::from($request->validated('role')),
+            'role' => $invitedRole,
             'invited_by' => $request->user()->id,
             'expires_at' => now()->addDays(3),
         ]);

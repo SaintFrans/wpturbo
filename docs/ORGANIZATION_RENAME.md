@@ -1,6 +1,9 @@
 # `Team` → `Organization` — execution plan
 
-_Written 2026-08-17. **Phases 1–5 executed.** Phase 6 remains._
+_Written 2026-08-17. **All six phases executed; last one 2026-08-18.**_
+
+> This document has done its job. Keep it only as long as the corrections in §3.4b, §5.1 and
+> §8.2 are still useful to whoever builds `Site`, `Server` and `Client`; delete it after that.
 
 The reasoning is in [ADR-025](DECISIONS.md) through [ADR-029](DECISIONS.md). This document is
 the _what to change_, in an order that can be verified at each step.
@@ -11,9 +14,9 @@ work.
 > **Executed so far.** `Team` is `Organization` everywhere — model, tables, enums, DTOs,
 > middleware, routes, URL segment, frontend types — laid out per [ADR-026](DECISIONS.md), and
 > the URL identifier is a `handle` per [ADR-030](DECISIONS.md), and every tenant route sits
-> behind `org/` per [ADR-031](DECISIONS.md). Suite: 113 passing, `composer ci:check` green.
+> behind `org/` per [ADR-031](DECISIONS.md). Suite: 120 passing, `composer ci:check` green.
 >
-> **Still true of the code, and deliberately so:** Admins still cannot manage members (phase 6).
+> **Nothing from ADR-025 through ADR-031 is left unimplemented.**
 
 ---
 
@@ -30,7 +33,7 @@ nothing changed, which you lose the moment behaviour changes in the same commit.
 | 3     | Remove the implicit organization switch                | 025     | **Done** 2026-08-18               |
 | 4     | Move organization administration inside the URL prefix | 025/031 | **Done** 2026-08-17               |
 | 5     | `slug` → name-seeded, editable `handle`                | 030     | **Done** 2026-08-17, with phase 1 |
-| 6     | Admins manage members below their own role             | 028     | Open                              |
+| 6     | Admins manage members below their own role             | 028     | **Done** 2026-08-18               |
 
 Every phase after 1 is separable. If you want the rename landed and nothing else, phase 1 alone
 is a coherent stopping point.
@@ -397,44 +400,42 @@ another organization.
 
 ## 8. Phase 6 — Admins manage members below their own role
 
-Per [ADR-028](DECISIONS.md). Independent of the rename; can be done first if urgent.
+Per [ADR-028](DECISIONS.md). **Done 2026-08-18.** Independent of the rename.
 
-### 8.1 The change
+### 8.1 What changed
 
-`OrganizationRole::permissions()` grants Admin `member:add`, `member:update`, `member:remove` and
-`invitation:create` in addition to what it already has. `organization:delete` stays Owner-only.
+- `OrganizationRole::outranks()` — one comparison, used everywhere a rank bound is needed.
+- Admin gains `member:add`, `member:update`, `member:remove` in `permissions()`.
+- `OrganizationPolicy::updateMember`, `removeMember`, `inviteMember` take the affected role as a
+  **required** argument. A call site that forgets it is a TypeError, not a silent bypass.
+  `updateMember` takes two: the member's current role and the role they would gain.
+- `assignable()` replaced by `assignableBy($actor)`. Owner drops out because a role does not
+  outrank itself, so ADR-020's guarantee holds by construction rather than by exception.
+- Form requests restrict the role to what the actor may assign, and gained `authorize()`.
+- The members page sends only the roles the viewer may actually assign.
 
-The rank constraint goes in `OrganizationPolicy`, **not** in the permission map — ADR-005's point
-is that the enum reads as a specification, and a level comparison baked into it would break that.
-Add to `updateMember`, `removeMember` and `inviteMember`:
+### 8.2 Two things this phase surfaced
 
-> the actor's `OrganizationRole::level()` must be **strictly greater** than the level of the role
-> being affected.
+**A live escalation path, predating the ADR.** `CreateOrganizationInvitationRequest` validated
+the role with `Rule::enum`, accepting `owner`, while the policy only asked whether the actor could
+invite at all. **Any Admin could invite a new Owner.** Confirmed with a probe test before touching
+anything, closed here, recorded as G11 in [SECURITY.md](SECURITY.md).
 
-`OrganizationRole::level()` already exists (Owner 3, Admin 2, Member 1) and is currently unused
-by any route.
+**Validation order matters.** Restricting the role in the form request without an `authorize()`
+made a Member's invitation attempt fail as a _field error_ instead of a 403 — right outcome,
+wrong reason, and it broke two existing tests in a way that looked unrelated
+(`Call to a member function all() on array`, thrown by Laravel's assertion helper, not by the
+application).
 
-### 8.2 The part that is easy to miss
+### 8.3 Tests
 
-`inviteMember` must validate the **invited role**, not just the action. An Admin issuing an
-invitation with `role: admin` is the escalation path this phase closes; checking only "may this
-user invite?" leaves it wide open. The check belongs in
-`CreateOrganizationInvitationRequest` as well as the policy, since the role arrives as user input.
+Seven, and each rank case is asserted **twice**: over HTTP and against the policy directly with
+`Gate::forUser()`. The form request rejects an out-of-range role before the policy is reached, so
+an HTTP-only test would prove validation works and say nothing about the control.
 
-### 8.3 Tests — all negative except the last
-
-- An Admin cannot remove another Admin (403).
-- An Admin cannot remove the Owner (403).
-- An Admin cannot change another Admin's role (403).
-- An Admin cannot promote a Member to Admin or Owner (403).
-- An Admin cannot invite someone as Admin or Owner (422 or 403).
-- An Admin **can** remove a Member, and can invite someone as a Member.
-
-### 8.4 Documentation
-
-[SECURITY.md](SECURITY.md) §3 "Privilege boundaries" currently states the opposite of this phase
-— that Admins cannot change roles or remove members. Rewrite it in the same change; leaving it is
-worse than having no note at all.
+Two existing tests described behaviour this phase deliberately reverses and were rewritten rather
+than deleted: "cannot be removed by non owners" and "roles cannot be updated by non owners" now
+assert what a _Member_ cannot do, which is still true.
 
 ---
 
@@ -494,13 +495,7 @@ or the line becomes a claim the file no longer earns.
 
 **Phase 5 — `handle`** ✅ done 2026-08-17, executed with phase 1; revised same day per ADR-030
 
-**Phase 6 — Admin member management**
-
-- [ ] Four permissions granted to Admin in `OrganizationRole::permissions()`
-- [ ] Rank check added to `updateMember`, `removeMember`, `inviteMember` in the policy
-- [ ] Invited **role** validated against the actor's level, in the form request too (§8.2)
-- [ ] The six tests in §8.3 added
-- [ ] SECURITY.md §3 privilege boundaries rewritten — it currently says the opposite
+**Phase 6 — Admin member management** ✅ done 2026-08-18
 
 **Close-out**
 
