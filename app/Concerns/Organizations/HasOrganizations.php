@@ -67,16 +67,6 @@ trait HasOrganizations
     }
 
     /**
-     * Get the user's personal organization.
-     */
-    public function personalOrganization(): ?Organization
-    {
-        return $this->organizations()
-            ->where('is_personal', true)
-            ->first();
-    }
-
-    /**
      * Switch to the given organization.
      */
     public function switchOrganization(Organization $organization): bool
@@ -153,7 +143,6 @@ trait HasOrganizations
             id: $organization->id,
             name: $organization->name,
             handle: $organization->handle,
-            isPersonal: $organization->is_personal,
             role: $role?->value,
             roleLabel: $role?->label(),
             isCurrent: $this->isCurrentOrganization($organization),

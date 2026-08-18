@@ -42,10 +42,14 @@ class OrganizationPolicy
 
     /**
      * Determine whether the user can leave the organization.
+     *
+     * The last-organization check replaces the old `! is_personal` clause and does the same job:
+     * every user keeps at least one tenant (ADR-025). The owner check is separate and unrelated —
+     * both must stay.
      */
     public function leave(User $user, Organization $organization): bool
     {
-        return ! $organization->is_personal
+        return ! $this->isLastOrganizationFor($user)
             && $user->belongsToOrganization($organization)
             && ! $user->ownsOrganization($organization);
     }
@@ -95,6 +99,15 @@ class OrganizationPolicy
      */
     public function delete(User $user, Organization $organization): bool
     {
-        return ! $organization->is_personal && $user->hasOrganizationPermission($organization, OrganizationPermission::DeleteOrganization);
+        return ! $this->isLastOrganizationFor($user)
+            && $user->hasOrganizationPermission($organization, OrganizationPermission::DeleteOrganization);
+    }
+
+    /**
+     * Determine whether this is the only organization the user has left.
+     */
+    protected function isLastOrganizationFor(User $user): bool
+    {
+        return $user->organizations()->count() <= 1;
     }
 }

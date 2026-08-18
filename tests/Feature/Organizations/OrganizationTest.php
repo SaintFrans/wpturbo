@@ -3,6 +3,7 @@
 use App\Enums\Organizations\OrganizationRole;
 use App\Models\Organizations\Organization;
 use App\Models\User;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('the organizations index redirects to the user\'s own organization', function () {
@@ -13,7 +14,7 @@ test('the organizations index redirects to the user\'s own organization', functi
     $this
         ->actingAs($user)
         ->get(route('organizations.index'))
-        ->assertRedirect(route('organizations.edit', $user->personalOrganization()));
+        ->assertRedirect(route('organizations.edit', $user->fallbackOrganization()));
 });
 
 test('organizations can be created', function () {
@@ -27,10 +28,7 @@ test('organizations can be created', function () {
 
     $response->assertRedirect();
 
-    $this->assertDatabaseHas('organizations', [
-        'name' => 'Test Organization',
-        'is_personal' => false,
-    ]);
+    $this->assertDatabaseHas('organizations', ['name' => 'Test Organization']);
 });
 
 test('a new organization gets a handle derived from its name', function () {
@@ -301,7 +299,7 @@ test('deleting current organization switches to alphabetically first remaining o
 
 test('deleting current organization falls back to personal organization when alphabetically first', function () {
     $user = User::factory()->create();
-    $personalOrganization = $user->personalOrganization();
+    $ownOrganization = $user->fallbackOrganization();
     $organization = Organization::factory()->create(['name' => 'Zulu Organization']);
     $organization->members()->attach($user, ['role' => OrganizationRole::Owner->value]);
 
@@ -319,16 +317,16 @@ test('deleting current organization falls back to personal organization when alp
         'id' => $organization->id,
     ]);
 
-    expect($user->fresh()->current_organization_id)->toEqual($personalOrganization->id);
+    expect($user->fresh()->current_organization_id)->toEqual($ownOrganization->id);
 });
 
 test('deleting non current organization leaves current organization unchanged', function () {
     $user = User::factory()->create();
-    $personalOrganization = $user->personalOrganization();
+    $ownOrganization = $user->fallbackOrganization();
     $organization = Organization::factory()->create();
     $organization->members()->attach($user, ['role' => OrganizationRole::Owner->value]);
 
-    $user->update(['current_organization_id' => $personalOrganization->id]);
+    $user->update(['current_organization_id' => $ownOrganization->id]);
 
     $response = $this
         ->actingAs($user)
@@ -342,10 +340,10 @@ test('deleting non current organization leaves current organization unchanged', 
         'id' => $organization->id,
     ]);
 
-    expect($user->fresh()->current_organization_id)->toEqual($personalOrganization->id);
+    expect($user->fresh()->current_organization_id)->toEqual($ownOrganization->id);
 });
 
-test('members can leave non personal organizations', function () {
+test('members can leave an organization when it is not their last', function () {
     $owner = User::factory()->create();
     $member = User::factory()->create();
     $organization = Organization::factory()->create();
@@ -389,17 +387,17 @@ test('leaving current organization switches to alphabetically first remaining or
     expect($member->fresh()->current_organization_id)->toEqual($alphaOrganization->id);
 });
 
-test('personal organizations cannot be left', function () {
+test('a user cannot leave their last organization', function () {
     $user = User::factory()->create();
-    $personalOrganization = $user->personalOrganization();
+    $ownOrganization = $user->fallbackOrganization();
 
     $response = $this
         ->actingAs($user)
-        ->delete(route('organizations.leave', $personalOrganization));
+        ->delete(route('organizations.leave', $ownOrganization));
 
     $response->assertForbidden();
 
-    expect($user->fresh()->belongsToOrganization($personalOrganization))->toBeTrue();
+    expect($user->fresh()->belongsToOrganization($ownOrganization))->toBeTrue();
 });
 
 test('organization owners cannot leave their organization', function () {
@@ -428,7 +426,7 @@ test('users cannot leave organizations they dont belong to', function () {
     $response->assertForbidden();
 });
 
-test('deleting organization switches other affected users to their personal organization', function () {
+test('deleting an organization gives affected members a valid current organization', function () {
     $owner = User::factory()->create();
     $member = User::factory()->create();
 
@@ -447,24 +445,24 @@ test('deleting organization switches other affected users to their personal orga
 
     $response->assertRedirect();
 
-    expect($member->fresh()->current_organization_id)->toEqual($member->personalOrganization()->id);
+    expect($member->fresh()->current_organization_id)->toEqual($member->fallbackOrganization()->id);
 });
 
-test('personal organizations cannot be deleted', function () {
+test('a user cannot delete their last organization', function () {
     $user = User::factory()->create();
 
-    $personalOrganization = $user->personalOrganization();
+    $ownOrganization = $user->fallbackOrganization();
 
     $response = $this
         ->actingAs($user)
-        ->delete(route('organizations.destroy', $personalOrganization), [
-            'name' => $personalOrganization->name,
+        ->delete(route('organizations.destroy', $ownOrganization), [
+            'name' => $ownOrganization->name,
         ]);
 
     $response->assertForbidden();
 
     $this->assertDatabaseHas('organizations', [
-        'id' => $personalOrganization->id,
+        'id' => $ownOrganization->id,
         'deleted_at' => null,
     ]);
 });
@@ -541,4 +539,90 @@ test('a non member cannot open the organization settings', function () {
 
     $this->actingAs($outsider)->get(route('organizations.edit', $organization))->assertForbidden();
     $this->actingAs($outsider)->get(route('organizations.members.index', $organization))->assertForbidden();
+});
+
+test('the organization created at registration carries no personal flag', function () {
+    $user = User::factory()->create(['name' => 'Frans Bijleveld']);
+    $organization = $user->fallbackOrganization();
+
+    // It is an ordinary organization: renameable, and deletable once a second one exists.
+    expect($organization->name)->toBe('Frans Bijleveld');
+    expect(Schema::hasColumn('organizations', 'is_personal'))->toBeFalse();
+});
+
+test('a user can delete their first organization once they have a second', function () {
+    $user = User::factory()->create();
+    $first = $user->fallbackOrganization();
+
+    $second = Organization::factory()->create(['name' => 'Zulu Organization']);
+    $second->members()->attach($user, ['role' => OrganizationRole::Owner->value]);
+
+    $this
+        ->actingAs($user)
+        ->delete(route('organizations.destroy', $first), ['name' => $first->name])
+        ->assertRedirect();
+
+    $this->assertSoftDeleted('organizations', ['id' => $first->id]);
+});
+
+test('a member removed from their last organization gets a new one', function () {
+    $owner = User::factory()->create();
+    $member = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    $memberOwnOrganization = $member->fallbackOrganization();
+
+    $organization->members()->attach($owner, ['role' => OrganizationRole::Owner->value]);
+    $organization->members()->attach($member, ['role' => OrganizationRole::Member->value]);
+
+    // Strip the member's own organization so the shared one really is their last.
+    $memberOwnOrganization->memberships()->delete();
+    $member->update(['current_organization_id' => $organization->id]);
+
+    $this
+        ->actingAs($owner)
+        ->delete(route('organizations.members.destroy', [$organization, $member]))
+        ->assertRedirect();
+
+    $member->refresh();
+
+    expect($member->organizations()->count())->toBe(1);
+    expect($member->current_organization_id)->not->toBeNull();
+    expect($member->currentOrganization->name)->toBe($member->name);
+});
+
+test('members of a deleted organization keep a valid current organization', function () {
+    $owner = User::factory()->create();
+    $member = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    $memberOwnOrganization = $member->fallbackOrganization();
+
+    $organization->members()->attach($owner, ['role' => OrganizationRole::Owner->value]);
+    $organization->members()->attach($member, ['role' => OrganizationRole::Member->value]);
+
+    $memberOwnOrganization->memberships()->delete();
+    $member->update(['current_organization_id' => $organization->id]);
+
+    $this
+        ->actingAs($owner)
+        ->delete(route('organizations.destroy', $organization), ['name' => $organization->name])
+        ->assertRedirect();
+
+    $member->refresh();
+
+    expect($member->current_organization_id)->not->toBeNull();
+    expect($member->belongsToOrganization($member->currentOrganization))->toBeTrue();
+});
+
+test('an owner with a second organization can still not leave the one they own', function () {
+    $owner = User::factory()->create();
+    $organization = Organization::factory()->create();
+    $organization->members()->attach($owner, ['role' => OrganizationRole::Owner->value]);
+
+    // Two guards used to live in one condition; dropping is_personal must not drop this one.
+    $this
+        ->actingAs($owner)
+        ->delete(route('organizations.leave', $organization))
+        ->assertForbidden();
 });

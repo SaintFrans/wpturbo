@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('handle')->unique();
-            $table->boolean('is_personal')->default(false);
             $table->timestamps();
             $table->softDeletes();
         });

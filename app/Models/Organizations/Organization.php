@@ -19,7 +19,6 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string $name
  * @property string $handle
- * @property bool $is_personal
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -27,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Membership> $memberships
  * @property-read Collection<int, User> $members
  */
-#[Fillable(['name', 'handle', 'is_personal'])]
+#[Fillable(['name', 'handle'])]
 class Organization extends Model
 {
     /** @use HasFactory<OrganizationFactory> */
@@ -99,18 +98,6 @@ class Organization extends Model
     public function invitations(): HasMany
     {
         return $this->hasMany(OrganizationInvitation::class);
-    }
-
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'is_personal' => 'boolean',
-        ];
     }
 
     /**

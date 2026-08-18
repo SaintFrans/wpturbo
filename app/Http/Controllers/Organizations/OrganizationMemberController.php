@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Organizations;
 
+use App\Actions\Organizations\EnsureUserHasOrganization;
 use App\Enums\Organizations\OrganizationRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Organizations\UpdateOrganizationMemberRequest;
@@ -26,7 +27,6 @@ class OrganizationMemberController extends Controller
                 'id' => $organization->id,
                 'name' => $organization->name,
                 'handle' => $organization->handle,
-                'isPersonal' => $organization->is_personal,
             ],
             'members' => $organization->members()->get()->map(function (User $member) {
                 /** @var Membership $membership */
@@ -78,7 +78,7 @@ class OrganizationMemberController extends Controller
     /**
      * Remove the specified organization member.
      */
-    public function destroy(Organization $organization, User $user): RedirectResponse
+    public function destroy(Organization $organization, User $user, EnsureUserHasOrganization $ensureUserHasOrganization): RedirectResponse
     {
         Gate::authorize('removeMember', $organization);
 
@@ -89,7 +89,9 @@ class OrganizationMemberController extends Controller
             ->delete();
 
         if ($user->isCurrentOrganization($organization)) {
-            $user->switchOrganization($user->personalOrganization());
+            // Removal is not the member's choice, so they may have just lost their last
+            // organization; give them one back rather than leaving them tenant-less (ADR-025).
+            $user->switchOrganization($ensureUserHasOrganization->handle($user, $organization));
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Member removed.')]);

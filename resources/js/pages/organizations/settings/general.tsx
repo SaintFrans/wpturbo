@@ -177,8 +177,7 @@ export default function OrganizationGeneralSettings({
                     </Frame>
                 )}
 
-                {permissions.canDeleteOrganization &&
-                !organization.isPersonal ? (
+                {permissions.canDeleteOrganization ? (
                     <Frame>
                         <FrameHeader>
                             <FrameTitle className="text-destructive">
@@ -218,7 +217,7 @@ export default function OrganizationGeneralSettings({
                 ) : null}
             </div>
 
-            {permissions.canDeleteOrganization && !organization.isPersonal ? (
+            {permissions.canDeleteOrganization ? (
                 <DeleteOrganizationModal
                     organization={organization}
                     open={deleteDialogOpen}

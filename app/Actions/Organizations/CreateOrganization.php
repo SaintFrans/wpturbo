@@ -12,12 +12,11 @@ class CreateOrganization
     /**
      * Create a new organization and add the user as owner.
      */
-    public function handle(User $user, string $name, bool $isPersonal = false): Organization
+    public function handle(User $user, string $name): Organization
     {
-        return DB::transaction(function () use ($user, $name, $isPersonal) {
+        return DB::transaction(function () use ($user, $name) {
             $organization = Organization::create([
                 'name' => $name,
-                'is_personal' => $isPersonal,
             ]);
 
             $membership = $organization->memberships()->create([

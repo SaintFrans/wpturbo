@@ -55,7 +55,7 @@ test('the organization created at registration is named after the user', functio
         'password_confirmation' => 'password',
     ]);
 
-    $organization = User::where('email', 'frans@example.com')->sole()->personalOrganization();
+    $organization = User::where('email', 'frans@example.com')->sole()->fallbackOrganization();
 
     // No "'s Organization" suffix: not everyone signing up is a company (ADR-025).
     expect($organization)

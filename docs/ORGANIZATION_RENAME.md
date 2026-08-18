@@ -1,6 +1,6 @@
 # `Team` → `Organization` — execution plan
 
-_Written 2026-08-17. **Phases 1, 4 and 5 executed 2026-08-17.** Phases 2, 3 and 6 remain._
+_Written 2026-08-17. **Phases 1, 2, 4 and 5 executed.** Phases 3 and 6 remain._
 
 The reasoning is in [ADR-025](DECISIONS.md) through [ADR-029](DECISIONS.md). This document is
 the _what to change_, in an order that can be verified at each step.
@@ -11,11 +11,10 @@ work.
 > **Executed so far.** `Team` is `Organization` everywhere — model, tables, enums, DTOs,
 > middleware, routes, URL segment, frontend types — laid out per [ADR-026](DECISIONS.md), and
 > the URL identifier is a `handle` per [ADR-030](DECISIONS.md), and every tenant route sits
-> behind `org/` per [ADR-031](DECISIONS.md). Suite: 103 passing, `composer ci:check` green.
+> behind `org/` per [ADR-031](DECISIONS.md). Suite: 110 passing, `composer ci:check` green.
 >
-> **Still true of the code, and deliberately so:** `is_personal` still exists (phase 2), visiting
-> a prefixed URL still switches the current organization (phase 3), and Admins still cannot manage
-> members (phase 6).
+> **Still true of the code, and deliberately so:** visiting a prefixed URL still switches the
+> current organization (phase 3), and Admins still cannot manage members (phase 6).
 
 ---
 
@@ -28,7 +27,7 @@ nothing changed, which you lose the moment behaviour changes in the same commit.
 | Phase | Change                                                 | ADR     | Status                            |
 | ----- | ------------------------------------------------------ | ------- | --------------------------------- |
 | 1     | Pure rename, plus the folder move                      | 025/026 | **Done** 2026-08-17               |
-| 2     | Remove `is_personal`, add the auto-create fallback     | 025     | Open                              |
+| 2     | Remove `is_personal`, add the auto-create fallback     | 025     | **Done** 2026-08-18               |
 | 3     | Remove the implicit organization switch                | 025     | Open                              |
 | 4     | Move organization administration inside the URL prefix | 025/031 | **Done** 2026-08-17               |
 | 5     | `slug` → name-seeded, editable `handle`                | 030     | **Done** 2026-08-17, with phase 1 |
@@ -256,82 +255,47 @@ php artisan wayfinder:generate && vendor/bin/pint --dirty --format agent && comp
 
 ## 4. Phase 2 — remove `is_personal`, add the fallback
 
-### 4.1 What `is_personal` currently does
+Per [ADR-025](DECISIONS.md). **Done 2026-08-18.**
 
-Nine places depend on it. All nine must be resolved, not deleted:
+### 4.1 What replaced it
 
-| File                                        | Current use                                              |
-| ------------------------------------------- | -------------------------------------------------------- |
-| `Organization` model                        | `$fillable`, `$casts`, docblock property                 |
-| `OrganizationPolicy::leave` (~line 48)      | `! $team->is_personal && …`                              |
-| `OrganizationPolicy::delete` (~line 98)     | `! $team->is_personal && …`                              |
-| `HasOrganizations::personalTeam()`          | the lookup itself                                        |
-| `CreateOrganization::handle()`              | `$isPersonal` parameter                                  |
-| `CreateNewUser`                             | `handle($user, $user->name."'s Team", isPersonal: true)` |
-| `RedirectsToCurrentOrganization`            | `$user->currentTeam ?? $user->personalTeam()`            |
-| `OrganizationMemberController::destroy`     | `switchTeam($user->personalTeam())`                      |
-| `OrganizationController::destroy`           | `switchTeam($affectedUser->personalTeam())`              |
-| `OrganizationController::edit`              | `'isPersonal' => $team->is_personal`                     |
-| `UserOrganization` DTO + `organizations.ts` | `isPersonal` field                                       |
-| `pages/organizations/index.tsx`, `edit.tsx` | three `isPersonal` branches                              |
+The invariant is unchanged — every user always has at least one organization — but it is now
+enforced by two rules instead of a column:
 
-### 4.2 The replacement
+- **Voluntary:** `OrganizationPolicy::leave` and `::delete` refuse when it is the user's _last_
+  organization (`isLastOrganizationFor`).
+- **Involuntary:** `App\Actions\Organizations\EnsureUserHasOrganization` returns the user's
+  fallback organization, or creates one named after them if none is left. Called from both places
+  a user can lose a membership without choosing to: `OrganizationMemberController::destroy` and
+  `OrganizationController::destroy`.
 
-**Registration.** `CreateNewUser` creates an organization named after the user — `$user->name`,
-with no suffix. `'s Team` reads wrong under the new term, and per ADR-025 no organization-name
-field is added to the registration form: not everyone signing up is a company.
+`personalOrganization()`, the `personal()` factory state, the `$isPersonal` parameter on
+`CreateOrganization`, the `isPersonal` DTO field and TypeScript property, and the column itself
+are all gone. The delete UI no longer hides behind `!organization.isPersonal`.
 
-**`CreateOrganization`** loses its `$isPersonal` parameter entirely.
+### 4.2 The part that was easy to get wrong
 
-**New action — `App\Actions\Organizations\EnsureUserHasOrganization`:**
+**Both policy conditions guarded two things at once.** `leave` blocked the personal organization
+_and_ the sole owner; `delete` blocked the personal organization _and_ required the permission.
+Deleting the `is_personal` clause rather than replacing it would have widened both. There is a
+regression test for the half that has nothing to do with this phase: an owner with a second
+organization still cannot leave the one they own.
 
-```
-handle(User $user): Organization
-    return the user's fallback organization if one exists,
-    otherwise create one named after the user and return it
-```
+### 4.3 Tests
 
-This is the involuntary defence. Call it from both places where a user can lose their last
-membership: `OrganizationMemberController::destroy` and `OrganizationController::destroy`.
-Both currently call `switchTeam($user->personalTeam())` and would otherwise switch to `null`.
+Five added, on top of the renamed ones ("personal organizations cannot be left" became "a user
+cannot leave their last organization"):
 
-**`HasOrganizations`** drops `personalTeam()`. `fallbackOrganization()` already exists and does
-the right thing — keep it, and let `EnsureUserHasOrganization` build on it.
+- the organization created at registration carries no personal flag, and the column is gone;
+- a user can delete their first organization once they have a second;
+- a member removed from their last organization gets a new one, named after them;
+- members of a deleted organization keep a valid current organization;
+- an owner with a second organization still cannot leave the one they own.
 
-**`OrganizationPolicy`** — replace both `! $team->is_personal` conditions with a last-organization
-check. This is the voluntary defence:
-
-```
-leave():   $user->organizations()->count() > 1
-             && $user->belongsToOrganization($organization)
-             && ! $user->ownsOrganization($organization)
-
-delete():  $user->organizations()->count() > 1
-             && $user->hasOrganizationPermission($organization, DeleteOrganization)
-```
-
-**Do not simply delete the `is_personal` clause** — that would widen both permissions. The
-policy currently blocks two things at once (personal teams, and the sole owner), and only the
-first is being replaced.
-
-**DTO and types.** Drop `isPersonal` from `UserOrganization`, `organizations.ts`, and the three
-branches in `pages/organizations/`. The organization list no longer distinguishes a personal
-organization; every row is a normal organization.
-
-### 4.3 Tests to add
-
-- A user's first organization is named after them and is deletable once they have a second.
-- A user cannot leave their last organization (403).
-- A user cannot delete their last organization (403).
-- A user removed from their last organization by an owner ends up with a fresh organization,
-  and `current_organization_id` points at it.
-- All members of a deleted organization end up with a valid current organization.
-
-### 4.4 Note on ownership
-
-ADR-020's rule is separate and still stands: the sole owner cannot leave regardless of how
-many organizations they belong to. Neither the database constraint nor the transfer flow it
-describes is built yet — do not assume it here.
+**A trap worth knowing:** `fallbackOrganization()` orders by `LOWER(name)`, so in a test where a
+user belongs to two organizations it does not reliably return "their own". Capture the
+registration organization _before_ attaching the user to a second one. Two of the tests above
+failed on exactly this.
 
 ---
 
@@ -521,13 +485,7 @@ or the line becomes a claim the file no longer earns.
 
 **Phase 1 — rename** ✅ done 2026-08-17
 
-**Phase 2 — `is_personal`**
-
-- [ ] All twelve call sites in §4.1 resolved
-- [ ] `EnsureUserHasOrganization` added and called from both destroy paths
-- [ ] Both policy conditions replaced, not deleted
-- [ ] `is_personal` dropped from the migration, DTO and TypeScript type together
-- [ ] The five tests in §4.3 added
+**Phase 2 — `is_personal`** ✅ done 2026-08-18
 
 **Phase 3 — implicit switch**
 

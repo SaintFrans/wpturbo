@@ -23,7 +23,7 @@ trait RedirectsToCurrentOrganization
 
         abort_if(! $user, 403);
 
-        $organization = $user->currentOrganization ?? $user->personalOrganization();
+        $organization = $user->currentOrganization ?? $user->fallbackOrganization();
 
         abort_if(! $organization, 403);
 

@@ -6,9 +6,9 @@ This document separates **what is built** from **what is intended**. Every secti
 which it is. Intended architecture is written down so decisions are not re-litigated, not
 because it exists.
 
-Three accepted decisions are **not** implemented, and each is flagged where it applies below:
-removing `is_personal` and the implicit organization switch (both [ADR-025](DECISIONS.md)), and
-Admin member management ([ADR-028](DECISIONS.md)). Status per phase is in
+Two accepted decisions are **not** implemented, and each is flagged where it applies below: the
+implicit organization switch ([ADR-025](DECISIONS.md)) and Admin member management
+([ADR-028](DECISIONS.md)). Status per phase is in
 [ORGANIZATION_RENAME.md](ORGANIZATION_RENAME.md) §1.
 
 ## 1. System overview
@@ -246,9 +246,10 @@ Registration creates an organization for the new user in the same database trans
 left without a tenant. No organization-name field is added to the registration form — not everyone
 signing up is a company.
 
-That organization is still flagged `is_personal`, and [ADR-025](DECISIONS.md) removes the flag
-while keeping the invariant: a user cannot leave or delete their last organization, and gets a new
-one if their last membership is removed by someone else. Phase 2, not yet implemented.
+That organization is ordinary — there is no personal-organization flag. The
+always-one-organization invariant is held by policy (you cannot leave or delete your last one)
+plus `EnsureUserHasOrganization`, which creates a replacement when someone else removes your last
+membership ([ADR-025](DECISIONS.md)).
 
 Password policy tightens in production only (`AppServiceProvider::configureDefaults`):
 12 characters, mixed case, numbers, symbols, and a check against known breach corpora. In

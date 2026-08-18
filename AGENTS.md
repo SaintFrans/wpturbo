@@ -314,10 +314,10 @@ Decided, see [ADR-025](docs/DECISIONS.md), [ADR-017](docs/DECISIONS.md) and
   one or more agencies), **not** a way to subdivide one company's work. The earlier guidance to
   name teams by function — `Front-end`, `Back-end`, `QA` — is **withdrawn**: it cannot work
   alongside ADR-019, which gives every resource exactly one owning tenant.
-- **There is no personal team.** `is_personal` is removed. Registration creates a normal
+- **There is no personal organization.** `is_personal` is gone. Registration creates a normal
   organization named after the user, renameable from settings. Every user still always has at
-  least one: you cannot leave or delete your last one, and one is created for you if your last
-  membership is removed by someone else.
+  least one: you cannot leave or delete your last one, and `EnsureUserHasOrganization` creates one
+  for you if your last membership is removed by someone else.
 - **`Client` is a new entity owned by an `Organization`**, not a tenancy boundary. It has no
   membership or login of its own. `Site` (and later `Domain`, `Mailbox`) carries a nullable
   `client_id` for grouping, reporting, and future billing/ticketing.
@@ -342,12 +342,11 @@ Four more decisions are accepted and equally unimplemented:
   Every member sees everything in their organization. If you are about to write a resource query
   for `Site` or `Server`, read Q13 first — that is the moment the assumption sets.
 
-**Half of this is implemented.** The rename and the handle change landed on 2026-08-17
-(phases 1, 4 and 5 of [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md)); `composer
-ci:check` is green on 103 tests. Three phases remain, and until they land the code still does the
-old thing in three specific places:
+**Most of this is implemented.** The rename and the handle change landed on 2026-08-17
+(phases 1, 2, 4 and 5 of [docs/ORGANIZATION_RENAME.md](docs/ORGANIZATION_RENAME.md)); `composer
+ci:check` is green on 110 tests. Two phases remain, and until they land the code still does the
+old thing in two specific places:
 
-- `is_personal` still exists, and registration still creates a "personal" organization (phase 2)
 - visiting a prefixed URL still writes `current_organization_id` (phase 3)
 - Admins still cannot manage members (phase 6)
 

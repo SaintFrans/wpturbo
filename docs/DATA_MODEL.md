@@ -12,25 +12,25 @@ unmodelled.
 ## Entity map
 
 ```
-     ┌──────────────────────┐              ┌────────────────────────┐
-     │        User          │              │     Organization       │
-     ├──────────────────────┤              ├────────────────────────┤
-     │ id                   │              │ id                     │
-     │ name                 │◀───┐    ┌───▶│ name                   │
-     │ email                │    │    │    │ handle ◀───────────────┼── unique, in the URL
-     │ password             │    │    │    │ is_personal            │
-     │ 2FA columns          │    │    │    │ deleted_at             │
-     │ current_organization_id ──┼────┘    └────────────────────────┘
-     └──────────────────────┘    │                 ▲       ▲
-              ▲                  │                 │       │
-              │   ┌──────────────────────┐         │       │  ┌──────────────────────┐
-              └───┤      Membership      ├─────────┘       └──┤ organization_handles │
-                  │ organization_members │                    ├──────────────────────┤
-                  ├──────────────────────┤                    │ handle  (unique)     │
-                  │ organization_id      │                    │ organization_id      │
-                  │ user_id              │                    └──────────────────────┘
-                  │ role                 │  UNIQUE(organization_id, user_id)
-                  └──────────────────────┘  owner | admin | member
+     ┌─────────────────────────┐           ┌──────────────────────┐
+     │          User           │           │     Organization     │
+     ├─────────────────────────┤           ├──────────────────────┤
+     │ id                      │           │ id                   │
+     │ name                    │◀──┐   ┌──▶│ name                 │
+     │ email                   │   │   │   │ handle ◀─────────────┼── unique, in the URL
+     │ password                │   │   │   │ deleted_at           │
+     │ 2FA columns             │   │   │   └──────────────────────┘
+     │ current_organization_id ├───┼───┘        ▲            ▲
+     └─────────────────────────┘   │            │            │
+                 ▲                 │            │            │
+                 │  ┌──────────────┴───────┐    │   ┌────────┴─────────────┐
+                 └──┤      Membership      ├────┘   │ organization_handles │
+                    │ organization_members │        ├──────────────────────┤
+                    ├──────────────────────┤        │ handle  (unique)     │
+                    │ organization_id      │        │ organization_id      │
+                    │ user_id              │        └──────────────────────┘
+                    │ role                 │  UNIQUE(organization_id, user_id)
+                    └──────────────────────┘  owner | admin | member
 
                           ┌──────────────────────────┐
                           │ OrganizationInvitation   │
@@ -80,12 +80,11 @@ repointing the reader's other tabs. Not yet implemented — phase 3 of
 
 `organizations`. Soft-deleted. Route key is `handle`, not `id`.
 
-| Column        | Notes                                                                   |
-| ------------- | ----------------------------------------------------------------------- |
-| `name`        | Free text. Required, max 255 — no reserved-word check                   |
-| `handle`      | **Unique.** Seeded from the name at creation, never changed by a rename |
-| `is_personal` | Marks the organization created automatically at registration            |
-| `deleted_at`  | Soft delete                                                             |
+| Column       | Notes                                                                   |
+| ------------ | ----------------------------------------------------------------------- |
+| `name`       | Free text. Required, max 255 — no reserved-word check                   |
+| `handle`     | **Unique.** Seeded from the name at creation, never changed by a rename |
+| `deleted_at` | Soft delete                                                             |
 
 **Why the handle is the route key.** It is the tenant identifier in the URL
 (`/org/acme-agency/dashboard`). Exposing sequential integer IDs would leak how many customers
@@ -110,15 +109,24 @@ bookmarks pointing at the old tenant would silently resolve to a _different_ ten
 cross-tenant leak triggered by nothing more than a stale bookmark ([ADR-006](DECISIONS.md)).
 
 **Why every user gets an organization at registration.** `CreateNewUser` creates one inside the
-registration transaction, named after the user. A user is therefore never in a state of having no
-tenant, which removes an entire class of null-tenant edge cases from every downstream feature.
+registration transaction, named after the user with no suffix. A user is therefore never in a
+state of having no tenant, which removes an entire class of null-tenant edge cases from every
+downstream feature.
 
-**`is_personal` is on its way out.** [ADR-025](DECISIONS.md) keeps the invariant and drops the
-flag: a user cannot leave or delete their **last** organization (the voluntary case), and a user
-whose last membership is removed by an owner gets a new organization created for them (the
-involuntary case, which cannot be blocked). Until phase 2 lands, two `OrganizationPolicy`
-conditions still key on `is_personal`, and each guards **two** things at once — the personal
-organization _and_ the sole owner. Replacing them means replacing both, not deleting the clause.
+**There is no personal organization.** The one created at registration is ordinary — renameable,
+and deletable once a second exists. The invariant is held by two rules instead of a flag
+([ADR-025](DECISIONS.md)):
+
+- **Voluntary** — `OrganizationPolicy` refuses to let a user leave or delete their _last_
+  organization.
+- **Involuntary** — an owner can remove someone, and an organization can be deleted out from
+  under its members. Neither can reasonably be forbidden, so
+  `App\Actions\Organizations\EnsureUserHasOrganization` restores the invariant afterwards,
+  creating an organization named after the user. It only ever creates something they own; it never
+  grants access to anything that existed.
+
+Note that both policy conditions guard **two** things: the last-organization rule _and_, in
+`leave`, the sole owner. They are unrelated and both must hold.
 
 **Known asymmetry, resolved but not yet implemented.** `Organization` uses `SoftDeletes`, but
 `OrganizationController::destroy` hard-deletes memberships and invitations before soft-deleting

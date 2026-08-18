@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Organizations;
 
 use App\Actions\Organizations\CreateOrganization;
+use App\Actions\Organizations\EnsureUserHasOrganization;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Organizations\DeleteOrganizationRequest;
 use App\Http\Requests\Organizations\SaveOrganizationRequest;
@@ -56,7 +57,6 @@ class OrganizationController extends Controller
                 'id' => $organization->id,
                 'name' => $organization->name,
                 'handle' => $organization->handle,
-                'isPersonal' => $organization->is_personal,
             ],
             'permissions' => $request->user()->toOrganizationPermissions($organization),
         ]);
@@ -126,17 +126,21 @@ class OrganizationController extends Controller
     /**
      * Delete the specified organization.
      */
-    public function destroy(DeleteOrganizationRequest $request, Organization $organization): RedirectResponse
+    public function destroy(DeleteOrganizationRequest $request, Organization $organization, EnsureUserHasOrganization $ensureUserHasOrganization): RedirectResponse
     {
         $user = $request->user();
         $fallbackOrganization = $user->isCurrentOrganization($organization)
             ? $user->fallbackOrganization($organization)
             : null;
 
-        DB::transaction(function () use ($user, $organization) {
+        DB::transaction(function () use ($user, $organization, $ensureUserHasOrganization) {
+            // Everyone else loses a membership they did not choose to lose, so the
+            // always-one-organization invariant is restored for them here (ADR-025).
             User::where('current_organization_id', $organization->id)
                 ->where('id', '!=', $user->id)
-                ->each(fn (User $affectedUser) => $affectedUser->switchOrganization($affectedUser->personalOrganization()));
+                ->each(fn (User $affectedUser) => $affectedUser->switchOrganization(
+                    $ensureUserHasOrganization->handle($affectedUser, $organization),
+                ));
 
             $organization->invitations()->delete();
             $organization->memberships()->delete();

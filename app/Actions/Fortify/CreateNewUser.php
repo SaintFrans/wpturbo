@@ -40,7 +40,7 @@ class CreateNewUser implements CreatesNewUsers
 
             // Named after the user, with no suffix: not everyone signing up is a company, and the
             // organization is renameable from settings like any other (ADR-025).
-            $this->createOrganization->handle($user, $user->name, isPersonal: true);
+            $this->createOrganization->handle($user, $user->name);
 
             return $user;
         });

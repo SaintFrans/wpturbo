@@ -113,7 +113,7 @@ test('organization member role cannot be set to owner', function () {
 test('removed member current organization is set to personal organization', function () {
     $owner = User::factory()->create();
     $member = User::factory()->create();
-    $personalOrganization = $member->personalOrganization();
+    $ownOrganization = $member->fallbackOrganization();
     $organization = Organization::factory()->create();
 
     $organization->members()->attach($owner, ['role' => OrganizationRole::Owner->value]);
@@ -125,5 +125,5 @@ test('removed member current organization is set to personal organization', func
         ->actingAs($owner)
         ->delete(route('organizations.members.destroy', [$organization, $member]));
 
-    expect($member->fresh()->current_organization_id)->toEqual($personalOrganization->id);
+    expect($member->fresh()->current_organization_id)->toEqual($ownOrganization->id);
 });

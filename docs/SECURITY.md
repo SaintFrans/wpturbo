@@ -19,8 +19,10 @@ _Last verified against the codebase: 2026-08-15._
 > _changed_ handle from being claimed by another tenant and inheriting its stale bookmarks.
 > The handle is public and is never an authorisation factor — see assumption 4.
 >
-> Still unimplemented, and both flagged in place below: the `is_personal` removal with its
-> auto-create fallback, and [ADR-028](DECISIONS.md)'s Admin member management (**G9 is open**).
+> Still unimplemented and flagged in place below: [ADR-028](DECISIONS.md)'s Admin member
+> management (**G9 is open**). `is_personal` is gone — every user keeps at least one organization
+> because policy blocks leaving or deleting the last one, and `EnsureUserHasOrganization` restores
+> the invariant when someone else removes their last membership.
 
 ## 0. The rule
 

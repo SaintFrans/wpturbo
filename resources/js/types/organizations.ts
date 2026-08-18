@@ -4,7 +4,6 @@ export type Organization = {
     id: number;
     name: string;
     handle: string;
-    isPersonal: boolean;
     role?: OrganizationRole;
     roleLabel?: string;
     isCurrent?: boolean;
