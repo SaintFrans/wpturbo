@@ -281,7 +281,7 @@ entry actually intended.
 
 ## ADR-032 — An append-only audit log, built now while there are five events
 
-**2026-08-18** · **Status**: Accepted. Closes [G5](SECURITY.md).
+**2026-08-18** · **Status**: Accepted, **implemented 2026-08-18**. Closes [G5](SECURITY.md).
 
 **Decision** — One append-only table records who did what, to whom, in which organization, when
 and from where. It is populated now with membership events — invite, cancel invitation, accept,
@@ -333,6 +333,35 @@ than a nice-to-have. The design does not change; the priority and the retention 
 - Entries record what was done, never the contents of what was done. Server credentials, agent
   tokens and invitation codes never reach this table.
 - **Retention is 24 months**, driven by NIS2 rather than by preference — see [ADR-036](#adr-036--retention-30-days-for-deleted-organizations-24-months-for-audit-entries).
+
+**What implementation found.**
+
+1. **"Tolerate a soft-deleted parent" turned out to understate it.** `organization_id` and
+   `target_id` carry no foreign key constraint at all, not merely one relaxed for soft deletes.
+   ADR-036's eventual hard purge means the organization row itself may one day be gone while its
+   entries live on for up to 24 months more, and the target (an invitation, a membership) is
+   routinely already force-deleted in the _same request_ that writes the entry describing it — an
+   invitation is gone the instant it is cancelled. A constrained key would have to choose between
+   blocking that delete and cascading it away, and both are wrong. `target_label` is a snapshot
+   taken at write time for the same reason: the target usually cannot be resolved by the time
+   anyone reads this.
+2. **Two events joined the list this entry did not name.** A member leaving voluntarily
+   (`OrganizationController::leave`) and an invitee declining
+   (`OrganizationInvitationController::decline`) are membership events in exactly the sense the
+   decision already cared about — leaving them out would have meant every Admin-initiated removal
+   was recorded and every self-initiated departure was not. Added as `member.left` and
+   `invitation.declined`.
+3. **Reading the log needed its own permission.** `OrganizationPermission::ViewAuditLog`, granted
+   to Owner and Admin, checked in a new `OrganizationPolicy::viewAuditLog()`. This is the one
+   deliberate exception to [ADR-037](#adr-037--every-member-sees-everything-in-their-organization-visibility-is-not-scoped)'s
+   "every member sees everything": the audit log is a record of administrative and destructive
+   action, not a resource members need to see to do their job, and ADR-032 already said Owners and
+   Admins specifically, not every member.
+4. **The Settings nav tab is not permission-gated**, unlike the page itself. `OrganizationSettingsLayout`
+   receives only `children` from `app.tsx`, not page props, and every sibling tab (`Members`) is
+   already shown unconditionally to every member. Threading `permissions` into that layout for one
+   tab was judged not worth a new pattern; a Member who follows the link gets the same 403 the
+   policy already produces. Recorded as an accepted rough edge, not silently decided.
 
 ---
 

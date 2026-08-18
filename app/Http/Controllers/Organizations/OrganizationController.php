@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Organizations;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Actions\Organizations\CreateOrganization;
 use App\Actions\Organizations\EnsureUserHasOrganization;
+use App\Enums\Audit\AuditAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Organizations\DeleteOrganizationRequest;
 use App\Http\Requests\Organizations\SaveOrganizationRequest;
@@ -100,11 +102,13 @@ class OrganizationController extends Controller
     /**
      * Leave the specified organization.
      */
-    public function leave(Request $request, Organization $organization): RedirectResponse
+    public function leave(Request $request, Organization $organization, RecordAuditEntry $recordAuditEntry): RedirectResponse
     {
         Gate::authorize('leave', $organization);
 
         $user = $request->user();
+
+        $membership = $organization->memberships()->where('user_id', $user->id)->firstOrFail();
 
         $fallbackOrganization = $user->isCurrentOrganization($organization)
             ? $user->fallbackOrganization($organization)
@@ -119,6 +123,19 @@ class OrganizationController extends Controller
             $user->switchOrganization($fallbackOrganization);
         }
 
+        // A membership event like any other (ADR-032) — the only one where the actor and the
+        // target are the same person.
+        $recordAuditEntry->handle(
+            organization: $organization,
+            actor: $user,
+            action: AuditAction::MemberLeft,
+            targetLabel: $user->email,
+            targetType: 'member',
+            targetId: $user->id,
+            context: ['role' => $membership->role->value],
+            ipAddress: $request->ip(),
+        );
+
         Inertia::flash('toast', ['type' => 'success', 'message' => __('You left the organization ":name"', ['name' => $organization->name])]);
 
         return to_route('organizations.index');
@@ -127,7 +144,7 @@ class OrganizationController extends Controller
     /**
      * Delete the specified organization.
      */
-    public function destroy(DeleteOrganizationRequest $request, Organization $organization, EnsureUserHasOrganization $ensureUserHasOrganization): RedirectResponse
+    public function destroy(DeleteOrganizationRequest $request, Organization $organization, EnsureUserHasOrganization $ensureUserHasOrganization, RecordAuditEntry $recordAuditEntry): RedirectResponse
     {
         $user = $request->user();
         $fallbackOrganization = $user->isCurrentOrganization($organization)
@@ -149,6 +166,18 @@ class OrganizationController extends Controller
             $organization->memberships()->delete();
             $organization->delete();
         });
+
+        // Written after the transaction, deliberately outside the soft-delete tree it just
+        // committed: this entry must survive the organization it describes (ADR-032).
+        $recordAuditEntry->handle(
+            organization: $organization,
+            actor: $user,
+            action: AuditAction::OrganizationDeleted,
+            targetLabel: $organization->name,
+            targetType: 'organization',
+            targetId: $organization->id,
+            ipAddress: $request->ip(),
+        );
 
         if ($fallbackOrganization) {
             $user->switchOrganization($fallbackOrganization);

@@ -156,8 +156,8 @@ purpose — different application types will present different sections, which a
 nav could not express.
 
 **Settings is the organization's own area** (`/org/{organization}/settings`), in row two, with
-`OrganizationSettingsLayout` supplying its `SectionNav`: General and Members today, Roles and
-Billing later. It earned that slot when ADR-031 made it tenant-scoped — before that it lived under
+`OrganizationSettingsLayout` supplying its `SectionNav`: General, Members and Audit log today,
+Roles and Billing later. It earned that slot when ADR-031 made it tenant-scoped — before that it lived under
 `/settings/…`, where a top-level tab would have been wrong.
 
 **Account settings are not an area.** `AccountLayout` carries Profile and Security, reached

@@ -53,16 +53,29 @@ reached by an already-authenticated user, whose email-match check (ADR-009) — 
 secrecy — was the actual control. Those now bind by `id`; `code_hash` backs only the one lookup
 that is genuinely pre-authentication, the emailed link. See ADR-033's implementation note.
 
-### 2 — Audit log (G5)
+### 2 — Audit log (G5) ✅ done 2026-08-18
 
-Settled by [ADR-032](DECISIONS.md) and [ADR-036](DECISIONS.md). This is the largest step here and
-the argument for its position is entirely about timing: there are five auditable actions today and
-there will be dozens once servers exist, each destructive. Retrofitting means finding every one,
-with no way to tell which were missed — a missing entry looks exactly like an action that never
-happened.
+Settled by [ADR-032](DECISIONS.md) and [ADR-036](DECISIONS.md). This was the largest step here and
+the argument for its position was entirely about timing: there were a handful of auditable actions
+and there will be dozens once servers exist, each destructive. Retrofitting means finding every
+one, with no way to tell which were missed — a missing entry looks exactly like an action that
+never happened.
 
 It also gives the agent a place to record what it was told to do, which is the fourth thing on the
 critical path.
+
+**What shipped.** Eight events, in a new `Audit` domain (`AuditLogEntry`, `AuditAction`,
+`RecordAuditEntry`) rather than inside `Organizations` — this table will be written to by `Server`
+and `Site` as well. `organization_id` and the target carry no foreign key, deliberately: entries
+must survive the organization's eventual hard purge, and the target is routinely already
+force-deleted by the very action being recorded. Owners and Admins read it at
+`/org/{organization}/settings/audit-log`, gated by a new `ViewAuditLog` permission — the one
+deliberate exception to ADR-037's "every member sees everything." See ADR-032's implementation
+note for what was added beyond the original decision.
+
+**Not done: the retention purge.** ADR-036 sets the periods (30 days, 24 months); the scheduled
+tasks that enforce them do not exist yet. Real work, but small, and not on the critical path to the
+agent — slot it in with G3 whenever there is room.
 
 ### 3 — Build `Client`, `Server`, `Site`
 

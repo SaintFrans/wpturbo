@@ -2,9 +2,9 @@
 
 _Last verified against the migrations and models: 2026-08-18._
 
-Five tables carry the domain today: `users`, `organizations`, `organization_handles`,
-`organization_members`, `organization_invitations`. Everything else in the database is framework
-scaffolding (cache, jobs, sessions, passkeys, password reset tokens).
+Six tables carry the domain today: `users`, `organizations`, `organization_handles`,
+`organization_members`, `organization_invitations`, `audit_log_entries`. Everything else in the
+database is framework scaffolding (cache, jobs, sessions, passkeys, password reset tokens).
 
 There is **no** entity for servers, sites, agents, deployments or billing. The hosting domain is
 unmodelled.
@@ -206,6 +206,43 @@ it — they would also need control of the invited mailbox. Deliberate; see
 `routes/console.php`. An unbounded pending invitation is a standing grant of access to a tenant,
 held by an address that may change hands.
 
+### AuditLogEntry
+
+`audit_log_entries` ([ADR-032](DECISIONS.md)). `App\Models\Audit\AuditLogEntry` — its own domain,
+`Audit`, since it will be written to by every future domain (`Server`, `Site`), not just
+`Organization`. Append-only: no `updated_at` column, and nothing in the application updates a row.
+
+| Column                     | Notes                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `organization_id`          | **No foreign key.** Indexed, but must outlive the organization's eventual hard purge (ADR-036)    |
+| `actor_id`                 | FK → `users`, nullable, `nullOnDelete`. Null for operator actions (ADR-029) and, later, the agent |
+| `action`                   | Cast to the `AuditAction` enum, e.g. `invitation.created`, `member.removed`                       |
+| `target_type`, `target_id` | What the action was done to. No foreign key, for the same reason as `organization_id`             |
+| `target_label`             | A snapshot of the target's identifying name/email, taken at write time                            |
+| `context`                  | Small JSON detail (e.g. a role transition). Never a payload — see below                           |
+| `ip_address`               | Nullable, 45 chars (IPv6-safe)                                                                    |
+| `created_at`               | The only timestamp — there is no `updated_at`                                                     |
+
+**No foreign key on `organization_id` or `target_id`, unlike every other tenant-owned table.** This
+is the one deliberate exception noted in [SECURITY.md](SECURITY.md) §5 rule 2, and it exists for a
+reason specific to this table: entries must survive the organization's eventual hard purge, and the
+target is routinely already force-deleted by the very action being recorded — cancelling an
+invitation deletes it in the same request that writes the entry describing it. `target_label`
+exists because of this: the target usually cannot be resolved by the time anyone reads the log.
+
+**Eight events are recorded today**: an invitation created, cancelled, accepted or declined; a
+member's role changed, a member removed, a member leaving voluntarily; and an organization
+deleted. The last two — a voluntary departure and a declined invitation — were added during
+implementation; ADR-032 named the others.
+
+**Read access is Owner and Admin only** — a `ViewAuditLog` permission, the one deliberate exception
+to [ADR-037](DECISIONS.md)'s "every member sees everything." This is a record of administrative
+and destructive action, not a resource a member needs to see to do their job.
+
+**Append-only is a convention, not a database guarantee.** The model exposes no update path and
+nothing in the application writes one. Enforcing it at the database level is a deployment concern,
+out of scope here.
+
 ## Roles and permissions
 
 Roles are an enum (`App\Enums\Organizations\OrganizationRole`), not strings in the database schema,
@@ -221,6 +258,7 @@ role to permission set.
 | `member:remove`       |  ✅   |  ✅¹  |   —    |
 | `invitation:create`   |  ✅   |  ✅¹  |   —    |
 | `invitation:cancel`   |  ✅   |  ✅   |   —    |
+| `audit_log:view`      |  ✅   |  ✅   |   —    |
 
 ¹ Only against a role ranking **strictly below** the actor's own ([ADR-028](DECISIONS.md)).
 
@@ -253,7 +291,7 @@ currently unused by any route.
 Two readonly DTOs in `app/Data/Organizations/` shape what crosses into React:
 
 - `UserOrganization` — id, name, handle, isPersonal, role, roleLabel, isCurrent
-- `OrganizationPermissions` — seven booleans, one per `OrganizationPermission`
+- `OrganizationPermissions` — eight booleans, one per `OrganizationPermission`
 
 `HandleInertiaRequests` shares `currentOrganization` and `organizations` as lazy props on every
 page.

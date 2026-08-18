@@ -16,22 +16,23 @@ genuinely contradicts one of those ADRs.
 Because `app/` is organised by Laravel type with a subfolder per domain inside each
 ([ADR-026](../../../../docs/DECISIONS.md)), organization code is not all here:
 
-| Concern               | Location                                                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Controllers           | `app/Http/Controllers/Organizations/` — `OrganizationController`, `OrganizationMemberController`, `OrganizationInvitationController` |
-| Organization creation | `app/Actions/Organizations/CreateOrganization.php`, `EnsureUserHasOrganization.php`                                                  |
-| User-side tenancy API | `app/Concerns/Organizations/HasOrganizations.php`                                                                                    |
-| Handle generation     | `app/Concerns/Organizations/GeneratesHandle.php` — reused by `Site`, `Server`, `Client` (ADR-030)                                    |
-| Models                | `app/Models/Organizations/{Organization,Membership,OrganizationInvitation}.php`                                                      |
-| Roles and permissions | `app/Enums/Organizations/{OrganizationRole,OrganizationPermission}.php`                                                              |
-| Authorisation         | `app/Policies/Organizations/OrganizationPolicy.php`                                                                                  |
-| Tenant boundary       | `app/Http/Middleware/EnsureOrganizationMembership.php`                                                                               |
-| URL defaults          | `app/Http/Middleware/SetOrganizationUrlDefaults.php`                                                                                 |
-| Requests              | `app/Http/Requests/Organizations/*.php`                                                                                              |
-| Validation rules      | `app/Rules/Organizations/{OrganizationHandle,UniqueOrganizationInvitation,ValidOrganizationInvitation}.php`                          |
-| Notifications         | `app/Notifications/Organizations/OrganizationInvitation.php` — queued ([ADR-023](../../../../docs/DECISIONS.md))                     |
-| DTOs                  | `app/Data/Organizations/{UserOrganization,OrganizationPermissions}.php`                                                              |
-| Frontend types        | `resources/js/types/organizations.ts`                                                                                                |
+| Concern               | Location                                                                                                                                                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Controllers           | `app/Http/Controllers/Organizations/` — `OrganizationController`, `OrganizationMemberController`, `OrganizationInvitationController`, `AuditLogController`                                                                    |
+| Organization creation | `app/Actions/Organizations/CreateOrganization.php`, `EnsureUserHasOrganization.php`                                                                                                                                           |
+| User-side tenancy API | `app/Concerns/Organizations/HasOrganizations.php`                                                                                                                                                                             |
+| Handle generation     | `app/Concerns/Organizations/GeneratesHandle.php` — reused by `Site`, `Server`, `Client` (ADR-030)                                                                                                                             |
+| Models                | `app/Models/Organizations/{Organization,Membership,OrganizationInvitation}.php`                                                                                                                                               |
+| Roles and permissions | `app/Enums/Organizations/{OrganizationRole,OrganizationPermission}.php`                                                                                                                                                       |
+| Authorisation         | `app/Policies/Organizations/OrganizationPolicy.php`                                                                                                                                                                           |
+| Tenant boundary       | `app/Http/Middleware/EnsureOrganizationMembership.php`                                                                                                                                                                        |
+| URL defaults          | `app/Http/Middleware/SetOrganizationUrlDefaults.php`                                                                                                                                                                          |
+| Requests              | `app/Http/Requests/Organizations/*.php`                                                                                                                                                                                       |
+| Validation rules      | `app/Rules/Organizations/{OrganizationHandle,UniqueOrganizationInvitation,ValidOrganizationInvitation}.php`                                                                                                                   |
+| Notifications         | `app/Notifications/Organizations/OrganizationInvitation.php` — queued ([ADR-023](../../../../docs/DECISIONS.md))                                                                                                              |
+| DTOs                  | `app/Data/Organizations/{UserOrganization,OrganizationPermissions}.php`                                                                                                                                                       |
+| Frontend types        | `resources/js/types/organizations.ts`                                                                                                                                                                                         |
+| Audit log             | `app/Models/Audit/AuditLogEntry.php`, `app/Enums/Audit/AuditAction.php`, `app/Actions/Audit/RecordAuditEntry.php` — its own domain, since `Server` and `Site` will write to it too ([ADR-032](../../../../docs/DECISIONS.md)) |
 
 A change to roles or permissions usually touches the enum, the policy, the DTO **and** the
 TypeScript type. Check all four.
@@ -87,6 +88,11 @@ route, so there is no reserved-word list to keep running. New **tenant resource*
 8. **Multi-table writes go in a transaction.** Organization creation, deletion and invitation
    acceptance all mutate several tables; a partial write leaves an ownerless organization or an
    orphaned membership.
+9. **A new membership or invitation event gets an audit entry.** Inject `RecordAuditEntry` and
+   call `->handle()` after the mutation succeeds — capture anything you need from the target
+   _before_ deleting it, since invitations and memberships are typically force-deleted in the
+   same request that audits them ([ADR-032](../../../../docs/DECISIONS.md)). This is not "add
+   logging to everything" — it is specifically membership and invitation lifecycle events.
 
 ## Known rough edges
 
@@ -96,17 +102,23 @@ route, so there is no reserved-word list to keep running. New **tenant resource*
   is sequenced, not forgotten.
 - `organizationRole()` queries per call, so `toUserOrganizations()` is N+1 over the user's organizations. Fine at
   current scale; worth eager-loading if organization counts grow.
+- The retention purge ADR-036 requires (30 days for deleted organizations, 24 months for audit
+  entries) is decided but not built — no scheduled task exists yet.
+- The "Audit log" settings tab is shown to every member; only the page itself is Owner/Admin-only
+  (ADR-032's implementation note explains why — `OrganizationSettingsLayout` receives no page
+  props to gate on). A Member who clicks it gets a 403, not a hidden tab.
 
 ## Testing
 
 `tests/Feature/Organizations/` — `OrganizationTest`, `OrganizationMemberTest`, `OrganizationInvitationTest`,
-`PruneExpiredOrganizationInvitationsTest`.
+`PruneExpiredOrganizationInvitationsTest`, `AuditLogTest`.
 
 Any change here needs the **negative** tests, not just the happy path:
 
 - a non-member gets 403 on the organization-prefixed route;
 - a Member cannot perform an Admin action;
 - an Admin cannot change roles, remove members, or delete the organization;
+- a Member cannot view the audit log;
 - an invitation cannot be accepted by a user whose email does not match;
 - an invitation belonging to organization A cannot be cancelled through organization B's URL.
 

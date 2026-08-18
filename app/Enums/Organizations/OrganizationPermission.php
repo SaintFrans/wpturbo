@@ -13,4 +13,6 @@ enum OrganizationPermission: string
 
     case CreateInvitation = 'invitation:create';
     case CancelInvitation = 'invitation:cancel';
+
+    case ViewAuditLog = 'audit_log:view';
 }

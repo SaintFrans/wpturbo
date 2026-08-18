@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Organizations;
 
+use App\Actions\Audit\RecordAuditEntry;
 use App\Actions\Organizations\EnsureUserHasOrganization;
+use App\Enums\Audit\AuditAction;
 use App\Enums\Organizations\OrganizationRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Organizations\UpdateOrganizationMemberRequest;
@@ -61,16 +63,28 @@ class OrganizationMemberController extends Controller
     /**
      * Update the specified organization member's role.
      */
-    public function update(UpdateOrganizationMemberRequest $request, Organization $organization, User $user): RedirectResponse
+    public function update(UpdateOrganizationMemberRequest $request, Organization $organization, User $user, RecordAuditEntry $recordAuditEntry): RedirectResponse
     {
         $membership = $organization->memberships()->where('user_id', $user->id)->firstOrFail();
         $newRole = OrganizationRole::from($request->validated('role'));
+        $previousRole = $membership->role;
 
         // Both the member's current role and the role they would gain must rank below the
         // actor's own, or an Admin could demote a peer or promote someone past themselves.
         Gate::authorize('updateMember', [$organization, $membership->role, $newRole]);
 
         $membership->update(['role' => $newRole]);
+
+        $recordAuditEntry->handle(
+            organization: $organization,
+            actor: $request->user(),
+            action: AuditAction::MemberRoleUpdated,
+            targetLabel: $user->email,
+            targetType: 'member',
+            targetId: $user->id,
+            context: ['from_role' => $previousRole->value, 'to_role' => $newRole->value],
+            ipAddress: $request->ip(),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Member role updated.')]);
 
@@ -80,7 +94,7 @@ class OrganizationMemberController extends Controller
     /**
      * Remove the specified organization member.
      */
-    public function destroy(Organization $organization, User $user, EnsureUserHasOrganization $ensureUserHasOrganization): RedirectResponse
+    public function destroy(Request $request, Organization $organization, User $user, EnsureUserHasOrganization $ensureUserHasOrganization, RecordAuditEntry $recordAuditEntry): RedirectResponse
     {
         $membership = $organization->memberships()->where('user_id', $user->id)->firstOrFail();
 
@@ -98,6 +112,17 @@ class OrganizationMemberController extends Controller
             // organization; give them one back rather than leaving them tenant-less (ADR-025).
             $user->switchOrganization($ensureUserHasOrganization->handle($user, $organization));
         }
+
+        $recordAuditEntry->handle(
+            organization: $organization,
+            actor: $request->user(),
+            action: AuditAction::MemberRemoved,
+            targetLabel: $user->email,
+            targetType: 'member',
+            targetId: $user->id,
+            context: ['role' => $membership->role->value],
+            ipAddress: $request->ip(),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Member removed.')]);
 

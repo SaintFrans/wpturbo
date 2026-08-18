@@ -3,10 +3,10 @@
 _Last verified against the codebase: 2026-08-18._
 
 Everything decided up to and including [ADR-034](DECISIONS.md) is implemented, plus
-[ADR-023](DECISIONS.md) and [ADR-033](DECISIONS.md) (closing G2 and G6). What remains: **G5**, the
-audit log ([ADR-032](DECISIONS.md)), and the retention purge tasks
-([ADR-036](DECISIONS.md)) that depend on it existing; **G3**, ownership transfer
-([ADR-020](DECISIONS.md), [ADR-029](DECISIONS.md)), deliberately deferred — see
+[ADR-023](DECISIONS.md), [ADR-032](DECISIONS.md) and [ADR-033](DECISIONS.md) (closing G2, G5 and
+G6). What remains: the retention purge tasks [ADR-036](DECISIONS.md) requires — 30 days for
+deleted organizations, 24 months for audit entries — neither of which exists yet; **G3**,
+ownership transfer ([ADR-020](DECISIONS.md), [ADR-029](DECISIONS.md)), deliberately deferred — see
 [MVP_PLAN.md](MVP_PLAN.md); and **G1**, the agent, which has no decision yet
 ([Q2](OPEN_QUESTIONS.md)).
 
@@ -81,8 +81,9 @@ What that uncertainty does **not** change:
 - **The retention periods in [ADR-036](DECISIONS.md) stand.** Twenty-four months for audit
   entries is defensible on its own — an incident is often found late, and a log that has already
   been pruned is worth nothing. It was chosen with NIS2 in mind and does not depend on it.
-- **The audit log is still worth building now** ([ADR-032](DECISIONS.md)), for the reason that
-  entry already gives: five call sites today, dozens once servers exist.
+- **The audit log is built** ([ADR-032](DECISIONS.md)), for the reason that entry already gives:
+  a handful of call sites today, dozens once servers exist. Its retention purge
+  ([ADR-036](DECISIONS.md)) is not — the scheduled task does not exist yet.
 
 What is parked until the scoping question is answered: registration with the NCSC, an incident
 response process, supply-chain requirements, and the non-delegable board responsibility. None of
@@ -231,6 +232,38 @@ all, matching the shape ADR-033 lays out for any future invite-style token.
 `invitations.accept` and `invitations.decline` are the only organization-touching routes outside
 the `org/` prefix, because the recipient is not a member yet.
 
+### Audit log
+
+An append-only `audit_log_entries` table ([ADR-032](DECISIONS.md)) records who did what, to whom,
+in which organization, when and from where. Written for eight events today: an invitation
+created, cancelled, accepted or declined; a member's role changed, a member removed, a member
+leaving voluntarily; and an organization deleted. Owners and Admins read their own organization's
+log at `/org/{organization}/settings/audit-log`, gated by a dedicated `ViewAuditLog` permission —
+the one deliberate exception to every member seeing everything else (ADR-037): this is a record of
+administrative and destructive action, not a resource members need to see to do their job.
+
+**Two events beyond ADR-032's original list.** A member leaving voluntarily and an invitation
+being declined are both membership events in the same sense as the ones the ADR named, and leaving
+them out would have meant every self-initiated departure went unrecorded while every
+Admin-initiated one did not. Added during implementation; recorded in ADR-032.
+
+**`organization_id` and `target_id` carry no foreign key.** Entries must survive the organization's
+eventual hard purge ([ADR-036](DECISIONS.md)), and the target (an invitation, a membership) is
+routinely already force-deleted by the very action being recorded — cancelling an invitation
+deletes it in the same request that writes the entry describing it. A `target_label` snapshot is
+taken at write time instead, since the target itself is usually gone by the time anyone reads this.
+
+**Append-only is a convention, not a database guarantee.** The model exposes no update or delete
+path and nothing in the application writes one. Enforcing it at the database level (privileges or
+triggers) is a deployment concern, out of scope here.
+
+**Actor may be null**, and does become null when the actor's own account is later deleted
+(`actor_id` is `nullOnDelete`, not cascading) — deleting your account must not erase the record of
+what you did while you had one. Every renderer handles a null actor as "System".
+
+**Retention is not yet built.** [ADR-036](DECISIONS.md) sets 24 months for audit entries and 30
+days for soft-deleted organizations; the scheduled purge tasks for both remain to be written.
+
 ## 4. Known gaps
 
 Recorded honestly. None is currently being exploited; all are real.
@@ -241,7 +274,7 @@ Recorded honestly. None is currently being exploited; all are real.
 | G2  | ~~No rate limit on invitation creation; email sent synchronously~~                         | **Closed 2026-08-18.** The notification already implemented `ShouldQueue`; what was missing was the rate limiter, now 5/min per inviting user                                                                                                                                   | [ADR-023](DECISIONS.md), [ADR-035](DECISIONS.md) |
 | G3  | Nothing guarantees exactly one Owner per organization, and ownership cannot be transferred | An abandoned organization has no recovery path; ownerless organizations are representable                                                                                                                                                                                       | [ADR-020](DECISIONS.md), [ADR-029](DECISIONS.md) |
 | G4  | ~~Organization soft-delete hard-deletes memberships~~                                      | **Closed 2026-08-18.** Memberships and invitations soft-delete with the organization, so a restore is a coherent whole. Individual removals stay hard deletes                                                                                                                   | [ADR-019](DECISIONS.md), [ADR-034](DECISIONS.md) |
-| G5  | No audit log                                                                               | No record of who invited, removed, promoted or deleted what. Once servers exist, no record of who instructed a destructive operation                                                                                                                                            | [ADR-032](DECISIONS.md)                          |
+| G5  | ~~No audit log~~                                                                           | **Closed 2026-08-18.** Membership and invitation events are recorded; retention purge (ADR-036) is a separate, still-open task                                                                                                                                                  | [ADR-032](DECISIONS.md)                          |
 | G6  | ~~Invitation codes are stored in plaintext~~                                               | **Closed 2026-08-18.** `code_hash` holds a SHA-256 digest; the plaintext exists only in the emailed link and is never persisted                                                                                                                                                 | [ADR-033](DECISIONS.md)                          |
 | G8  | ~~Production password policy is environment-conditional~~                                  | **Closed 2026-08-18.** The condition is inverted: strict everywhere except in tests, so a misconfigured environment makes development stricter rather than production weaker                                                                                                    | —                                                |
 | G9  | ~~Only the Owner can revoke a member's access~~                                            | **Closed 2026-08-18.** Admins can remove and re-role members ranking below them, so revocation no longer has a bus factor of one                                                                                                                                                | [ADR-028](DECISIONS.md)                          |
@@ -266,7 +299,10 @@ Non-negotiable, and applied whether or not the task mentions security.
    is a 404.
 2. **Every tenant-owned table carries `organization_id`.** `Client` (ADR-017), `Site` and
    everything under it hang off `Organization`, not off each other. Ownership is a column, not
-   an inference across joins.
+   an inference across joins. `audit_log_entries` (ADR-032) is the one deliberate exception to a
+   _constrained_ foreign key, not to the column itself: it must outlive the organization's eventual
+   purge (ADR-036), so it is indexed but not constrained. State that trade-off explicitly if another
+   table ever needs it — do not treat it as a precedent for skipping `organization_id` altogether.
 3. **Every tenant route lives inside the `EnsureOrganizationMembership` group**, under
    `/org/{organization}/…`. No exceptions without an ADR. After adding or moving routes, verify
    with `php artisan route:list` that nothing landed outside it.

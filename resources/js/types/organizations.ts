@@ -50,6 +50,16 @@ export type OrganizationPermissions = {
     canRemoveMember: boolean;
     canCreateInvitation: boolean;
     canCancelInvitation: boolean;
+    canViewAuditLog: boolean;
+};
+
+export type AuditLogEntry = {
+    id: number;
+    actorName: string | null;
+    action: string;
+    actionLabel: string;
+    targetLabel: string | null;
+    createdAt: string;
 };
 
 export type RoleOption = {

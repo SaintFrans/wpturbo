@@ -4,6 +4,7 @@ namespace App\Models\Organizations;
 
 use App\Concerns\Organizations\GeneratesHandle;
 use App\Enums\Organizations\OrganizationRole;
+use App\Models\Audit\AuditLogEntry;
 use App\Models\User;
 use Database\Factories\Organizations\OrganizationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -25,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, OrganizationInvitation> $invitations
  * @property-read Collection<int, Membership> $memberships
  * @property-read Collection<int, User> $members
+ * @property-read Collection<int, AuditLogEntry> $auditLogEntries
  */
 #[Fillable(['name', 'handle'])]
 class Organization extends Model
@@ -106,5 +108,19 @@ class Organization extends Model
     public function getRouteKeyName(): string
     {
         return 'handle';
+    }
+
+    /**
+     * Get this organization's audit log.
+     *
+     * There is no database foreign key backing this — see `AuditLogEntry`'s docblock — but the
+     * relationship still exists so reads go through it like every other tenant-owned resource
+     * (SECURITY.md §5 rule 1).
+     *
+     * @return HasMany<AuditLogEntry, $this>
+     */
+    public function auditLogEntries(): HasMany
+    {
+        return $this->hasMany(AuditLogEntry::class);
     }
 }

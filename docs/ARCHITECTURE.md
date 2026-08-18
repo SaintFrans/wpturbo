@@ -101,20 +101,25 @@ in doubt about which you want, check `package.json`.
 
 ```
 app/
-  Actions/          Fortify/  Organizations/     single-purpose operations
+  Actions/          Fortify/  Organizations/  Audit/     single-purpose operations
   Concerns/         Organizations/ (HasOrganizations, GeneratesHandle) + validation-rule traits
   Data/             Organizations/ (UserOrganization, OrganizationPermissions)
-  Enums/            Organizations/ (OrganizationRole, OrganizationPermission)
+  Enums/            Organizations/ (OrganizationRole, OrganizationPermission)  Audit/ (AuditAction)
   Http/
-    Controllers/    Settings/  Organizations/
+    Controllers/    Settings/  Organizations/ (incl. AuditLogController)
     Middleware/     EnsureOrganizationMembership, SetOrganizationUrlDefaults, HandleInertiaRequests
     Requests/       Settings/  Organizations/
     Responses/      Fortify response overrides (post-login redirect targets)
-  Models/           User + Organizations/ (Organization, Membership, OrganizationInvitation)
+  Models/           User + Organizations/ (Organization, Membership, OrganizationInvitation)  Audit/ (AuditLogEntry)
   Notifications/    Organizations/
   Policies/         Organizations/ (OrganizationPolicy)
   Rules/            Organizations/ (OrganizationHandle, UniqueOrganizationInvitation, ValidOrganizationInvitation)
 ```
+
+**`Audit` is the first domain that is not `Organizations`**, and deliberately thin: one model, one
+enum, one action ([ADR-032](DECISIONS.md)). It exists as its own domain rather than living inside
+`Organizations` because `Server` and `Site` will write to the same table once they exist — the
+audit log belongs to no single resource domain, the same reasoning that keeps `User` flat.
 
 `User`, `Providers`, `Console`, the Fortify actions, Inertia middleware and shared
 validation-rule traits stay flat — they belong to no domain. Factories follow the model namespace,

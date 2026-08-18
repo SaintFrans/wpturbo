@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Organizations\AuditLogController;
 use App\Http\Controllers\Organizations\OrganizationController;
 use App\Http\Controllers\Organizations\OrganizationInvitationController;
 use App\Http\Controllers\Organizations\OrganizationMemberController;
@@ -52,6 +53,8 @@ Route::prefix('org/{organization}')
             Route::get('settings/members', [OrganizationMemberController::class, 'index'])->name('members.index');
             Route::patch('settings/members/{user}', [OrganizationMemberController::class, 'update'])->name('members.update');
             Route::delete('settings/members/{user}', [OrganizationMemberController::class, 'destroy'])->name('members.destroy');
+
+            Route::get('settings/audit-log', [AuditLogController::class, 'index'])->name('audit-log.index');
 
             Route::post('settings/invitations', [OrganizationInvitationController::class, 'store'])
                 ->middleware('throttle:invitations')

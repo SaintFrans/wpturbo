@@ -101,6 +101,18 @@ class OrganizationPolicy
     }
 
     /**
+     * Determine whether the user can view the organization's audit log.
+     *
+     * Owner and Admin only (ADR-032) — the one deliberate exception to every member seeing
+     * everything else in their organization (ADR-037). It is a record of administrative and
+     * destructive action, not a resource members need to see to do their job.
+     */
+    public function viewAuditLog(User $user, Organization $organization): bool
+    {
+        return $user->hasOrganizationPermission($organization, OrganizationPermission::ViewAuditLog);
+    }
+
+    /**
      * Determine whether the user can delete the model.
      */
     public function delete(User $user, Organization $organization): bool

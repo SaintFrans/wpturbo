@@ -164,6 +164,7 @@ trait HasOrganizations
             canRemoveMember: $role?->hasPermission(OrganizationPermission::RemoveMember) ?? false,
             canCreateInvitation: $role?->hasPermission(OrganizationPermission::CreateInvitation) ?? false,
             canCancelInvitation: $role?->hasPermission(OrganizationPermission::CancelInvitation) ?? false,
+            canViewAuditLog: $role?->hasPermission(OrganizationPermission::ViewAuditLog) ?? false,
         );
     }
 
