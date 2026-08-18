@@ -252,6 +252,7 @@ hosting-domain code exists — verify before referencing it. See [README.md](REA
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md)         | Touching models, migrations or DTOs                                         |
 | [docs/DECISIONS.md](docs/DECISIONS.md)           | Before changing something that looks arbitrary — it probably is not         |
 | [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) | **Always check.** If your task touches an open question, stop and ask       |
+| [docs/MVP_PLAN.md](docs/MVP_PLAN.md)             | You need the order of what remains before the Go agent                      |
 | [docs/SECURITY.md](docs/SECURITY.md)             | Every task. The rules in §5 apply whether or not the task mentions security |
 
 Scoped guidance: [app/CLAUDE.md](app/CLAUDE.md),

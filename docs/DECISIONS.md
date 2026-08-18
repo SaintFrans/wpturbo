@@ -57,13 +57,15 @@ the wrong thing, and short enough to defend as data minimisation. Note what is b
 meantime: the organization's name, its handle history, its memberships, and the email address of
 everyone ever invited.
 
-**24 months for audit entries, driven by NIS2.** The Cyberbeveiligingswet took effect on
-15 August 2026 and names managed service providers and hosting providers explicitly. This product
-is one, and it has been established that it falls in scope. That changes the audit log from a
-transparency feature into part of the zorgplicht: the reporting duty runs at 24 hours, 72 hours
-and one month, and none of those is meetable if the platform cannot reconstruct what happened.
-Twelve months was the recommendation before that was known; two years covers an incident found
-late and an audit of the year before it.
+**24 months for audit entries.** Twelve was the first recommendation, on the reasoning that
+incidents surface within months. Two years was chosen instead because an incident found late is
+exactly the case where a log matters, and because the Cyberbeveiligingswet — which took effect on
+15 August 2026 and names managed service providers explicitly — may well apply here. **Whether it
+does is unsettled** and is parked (see [SECURITY.md](SECURITY.md) §1): this platform manages
+servers its customers own rather than supplying its own, and that distinction may matter.
+
+The period does not depend on the answer. Two years is defensible on its own, and if the
+obligation turns out not to apply, nothing here needs revisiting.
 
 **Pseudonymising instead of deleting was rejected.** Under NIS2 the useful question in an incident
 is _who_, so stripping the actor is exactly the wrong reduction. Over a 24-month window the
@@ -86,10 +88,8 @@ a stale link resolving to a different tenant ([ADR-006](#adr-006--slug-uniquenes
 - These periods are a choice, not a legal maximum, so they must appear in whatever privacy
   statement and processor agreement the first customer gets. There are no customers yet; the
   numbers are recorded here so the agreement can be written against something.
-- **This ADR covers retention only.** NIS2's other obligations — registration with the NCSC, an
-  incident response process, supply-chain requirements, non-delegable board responsibility — are
-  organisational and are not addressed by any decision in this log. See
-  [SECURITY.md](SECURITY.md) §1.
+- **This ADR covers retention only**, and deliberately does not resolve whether NIS2 applies.
+  Its other obligations are organisational, parked, and addressed by no decision in this log.
 
 ---
 

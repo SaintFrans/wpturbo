@@ -66,32 +66,24 @@ consistently choosing the more expensive option.
 
 ### Regulatory context — NIS2 / Cyberbeveiligingswet
 
-**The Cyberbeveiligingswet took effect on 15 August 2026, and this platform is in scope.** It
-names managed service providers and hosting providers explicitly, which is what this product is.
-Confirmed on 2026-08-18; revisit if the business changes shape.
+**Status: open, deliberately parked.** The Cyberbeveiligingswet took effect on 15 August 2026 and
+names managed service providers and hosting providers explicitly. Whether it applies here is
+**not settled**: the platform manages servers the customer owns rather than supplying its own, and
+whether that makes it a managed service provider in the sense the law means is a question for
+someone qualified to answer it. Do not treat this section as a compliance position.
 
-That does not alter the threat model above — it raises the stakes on parts of it and adds
-obligations that are not the codebase's to solve. Split honestly:
+What that uncertainty does **not** change:
 
-**Affects the code, and is decided:**
+- **The retention periods in [ADR-036](DECISIONS.md) stand.** Twenty-four months for audit
+  entries is defensible on its own — an incident is often found late, and a log that has already
+  been pruned is worth nothing. It was chosen with NIS2 in mind and does not depend on it.
+- **The audit log is still worth building now** ([ADR-032](DECISIONS.md)), for the reason that
+  entry already gives: five call sites today, dozens once servers exist.
 
-- An audit log capable of reconstructing an incident, kept 24 months
-  ([ADR-032](DECISIONS.md), [ADR-036](DECISIONS.md)). The reporting duty runs at 24 hours,
-  72 hours and one month, and none of those is meetable without one.
-
-**Affects the code, and is not built:** detection. There is nothing that notices anything — no
-alerting, no anomaly detection, no failed-login monitoring beyond rate limiting. A 24-hour
-reporting clock starts when you _find out_, and today nothing would tell us. Recorded as G12.
-
-**Does not touch this repository at all**, listed so it is not mistaken for handled:
-
-- Registration with the NCSC.
-- An incident response process, including who decides that something is reportable.
-- Supply-chain requirements, which flow down to our own providers — Laravel Cloud
-  ([ADR-035](DECISIONS.md)) and Stripe among them.
-- Board responsibility, which is explicitly non-delegable.
-
-None of the above is a coding task, and none of it is done.
+What is parked until the scoping question is answered: registration with the NCSC, an incident
+response process, supply-chain requirements, and the non-delegable board responsibility. None of
+those is a coding task and none is done. **Detection is the one that is** — see G12 — and it is
+deliberately not a priority right now.
 
 ## 2. Assumptions
 
@@ -239,7 +231,7 @@ Recorded honestly. None is currently being exploited; all are real.
 | G9  | ~~Only the Owner can revoke a member's access~~                                            | **Closed 2026-08-18.** Admins can remove and re-role members ranking below them, so revocation no longer has a bus factor of one                                                                                                                                                | [ADR-028](DECISIONS.md)                          |
 | G10 | ~~The organization's name is in every URL~~                                                | **Withdrawn 2026-08-17 — this was never a real gap.** `EnsureOrganizationMembership` returns one indistinguishable 403 for "no such organization" and "not a member", so a readable handle enables no enumeration                                                               | [ADR-030](DECISIONS.md)                          |
 | G11 | ~~Any Admin could invite a new Owner~~                                                     | **Closed 2026-08-18.** `CreateOrganizationInvitationRequest` validated the role with `Rule::enum`, accepting `owner`, while `inviteMember` only checked whether the actor could invite at all. A live escalation path that predated ADR-028 and was found while implementing it | [ADR-028](DECISIONS.md)                          |
-| G12 | Nothing detects that an incident has happened                                              | No alerting, no anomaly detection, no monitoring of failed logins or unusual membership changes. Under NIS2 the 24-hour reporting clock starts when we find out, and nothing would tell us                                                                                      | —                                                |
+| G12 | Nothing detects that an incident has happened                                              | No alerting, no anomaly detection, no monitoring of failed logins or unusual membership changes. The audit log records what happened; it does not tell anyone that it did. Deliberately not a priority before the MVP                                                           | —                                                |
 
 **G1 is the only one still without a decision**, and it is a design programme rather than a fix —
 see [Q2](OPEN_QUESTIONS.md). Everything else now has an ADR and is waiting on implementation, in
