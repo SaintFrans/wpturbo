@@ -21,7 +21,7 @@ type Props = {
  * keeps prefetching available.
  */
 export function SectionNav({ items, label, className }: Props) {
-    const { isCurrentOrParentUrl } = useCurrentUrl();
+    const { isCurrentUrl } = useCurrentUrl();
 
     return (
         <nav
@@ -29,7 +29,10 @@ export function SectionNav({ items, label, className }: Props) {
             className={cn('flex flex-col gap-y-1', className)}
         >
             {items.map((item) => {
-                const isCurrent = isCurrentOrParentUrl(item.href);
+                // Exact match, not isCurrentOrParentUrl: sibling sections can be literal
+                // path prefixes of each other (e.g. `/settings` and `/settings/members`),
+                // which would otherwise highlight both at once.
+                const isCurrent = isCurrentUrl(item.href);
 
                 return (
                     <Link
