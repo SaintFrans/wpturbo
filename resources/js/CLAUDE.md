@@ -87,6 +87,13 @@ cost two invisible delete buttons after the React Aria migration.
 A menu item cannot also be a dialog trigger. Open the dialog from state instead — see
 `organization-switcher.tsx` driving `CreateOrganizationModal` through `isOpen`/`onOpenChange`.
 
+**A submit button needs `type="submit"` spelled out.** React Aria's `Button` renders
+`type="button"` unless told otherwise, so a submit button written the plain HTML way — no
+`type` at all — sits inside an Inertia `<Form>` and does nothing when pressed. It cost the
+password-confirmation, forgot-password and resend-verification forms, all three of which
+looked correct and type checked. `tests/Feature/FormSubmitButtonTest.php` asserts against
+that shape by looking for `isDisabled={processing}` without `type="submit"`.
+
 ### Navigation has two levels (ADR-016)
 
 | Level    | Where                             | Holds                                                                                               |

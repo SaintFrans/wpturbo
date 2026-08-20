@@ -21,7 +21,11 @@ export default function VerifyEmail({ status }: { status?: string }) {
             <Form {...send.form()} className="space-y-6 text-center">
                 {({ processing }) => (
                     <>
-                        <Button isDisabled={processing} variant="secondary">
+                        <Button
+                            type="submit"
+                            isDisabled={processing}
+                            variant="secondary"
+                        >
                             {processing && <Spinner />}
                             Resend verification email
                         </Button>
