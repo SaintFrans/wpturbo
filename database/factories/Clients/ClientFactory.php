@@ -20,21 +20,18 @@ class ClientFactory extends Factory
     {
         return [
             'organization_id' => Organization::factory(),
-            'name' => fake()->unique()->company(),
-            'contact_name' => fake()->name(),
+            'name' => fake()->unique()->name(),
             'contact_email' => fake()->unique()->safeEmail(),
             'contact_phone' => fake()->phoneNumber(),
         ];
     }
 
     /**
-     * Indicate that the client holds nothing but a name.
+     * Indicate that the client has no phone number, the only optional field.
      */
-    public function withoutContactDetails(): static
+    public function withoutPhone(): static
     {
         return $this->state(fn (array $attributes) => [
-            'contact_name' => null,
-            'contact_email' => null,
             'contact_phone' => null,
         ]);
     }

@@ -23,15 +23,14 @@ use Illuminate\Support\Carbon;
  * @property int $organization_id
  * @property string $public_id
  * @property string $name
- * @property string|null $contact_name
- * @property string|null $contact_email
+ * @property string $contact_email
  * @property string|null $contact_phone
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  * @property-read Organization $organization
  */
-#[Fillable(['name', 'contact_name', 'contact_email', 'contact_phone'])]
+#[Fillable(['name', 'contact_email', 'contact_phone'])]
 class Client extends Model
 {
     /** @use HasFactory<ClientFactory> */

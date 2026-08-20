@@ -39,7 +39,8 @@ unmodelled.
         Organization ◀────┤ organization_id          │
                           │ public_id  (unique)      │ ← the route key, 5 random chars
                           │ name                     │
-                          │ contact_* (all nullable) │
+                          │ contact_email            │
+                          │ contact_phone (nullable) │
                           │ deleted_at               │
                           └──────────────────────────┘
 
@@ -226,13 +227,14 @@ A customer of the organization, used to group the sites built and maintained for
 tenancy boundary and not a login: no membership, no role, no account. Every member of the owning
 organization sees every client in it (ADR-037).
 
-| Column                                           | Notes                                                       |
-| ------------------------------------------------ | ----------------------------------------------------------- |
-| `organization_id`                                | FK, `cascadeOnDelete`. The owning tenant (ADR-019)          |
-| `public_id`                                      | **Unique.** Five random characters, assigned once on create |
-| `name`                                           | Required, max 255. Free text                                |
-| `contact_name`, `contact_email`, `contact_phone` | All nullable — a client may be nothing but a name           |
-| `deleted_at`                                     | Soft delete                                                 |
+| Column            | Notes                                                       |
+| ----------------- | ----------------------------------------------------------- |
+| `organization_id` | FK, `cascadeOnDelete`. The owning tenant (ADR-019)          |
+| `public_id`       | **Unique.** Five random characters, assigned once on create |
+| `name`            | Required, max 255. Free text                                |
+| `contact_email`   | Required. Validated for shape, **not** for uniqueness       |
+| `contact_phone`   | Nullable — the only optional field                          |
+| `deleted_at`      | Soft delete                                                 |
 
 **Why the route key is a random id and not a handle.** A handle earns its cost in the tenant
 segment of the URL, where people read and share it. Nobody guesses their way to a client. The row
@@ -252,8 +254,16 @@ that is what `deleted_at` is for here. Deleting one client is an individual, exp
 permission-gated act, so `ClientController::destroy` calls `forceDelete()`. The same asymmetry
 memberships and invitations already have.
 
-**Contact details are validated for shape, never for uniqueness.** Two clients of one agency
-legitimately share a contact person.
+**Why the email is required and the phone is not.** A client with no way to reach them is a record
+nothing can act on, and every later feature that mails a client — reports, billing, ticketing
+(ADR-017) — would have to carry the gap. There is no equivalent argument for a phone number.
+
+**The email is validated for shape, never for uniqueness.** Two clients of one agency legitimately
+share a contact person, so a unique index would be wrong rather than merely strict.
+
+**There is no separate contact-person name.** The client's own `name` carries it: an agency's client
+is as often a person as a company, and a second name field made every record ask which of the two
+it was.
 
 **`Site.client_id` does not exist yet**, because `Site` does not. When it arrives it is nullable —
 a site need not belong to a client (ADR-017, ADR-018).

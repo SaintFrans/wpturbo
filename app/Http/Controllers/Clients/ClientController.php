@@ -38,7 +38,6 @@ class ClientController extends Controller
                 ->map(fn (Client $client) => [
                     'id' => $client->public_id,
                     'name' => $client->name,
-                    'contactName' => $client->contact_name,
                     'contactEmail' => $client->contact_email,
                     'contactPhone' => $client->contact_phone,
                     'createdAt' => $client->created_at?->toIso8601String(),

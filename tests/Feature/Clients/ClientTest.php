@@ -78,28 +78,55 @@ test('a member can create a client', function () {
 
     $this->actingAs($user)
         ->post(route('clients.store', $organization), [
-            'name' => 'De Boer Bouw',
-            'contact_email' => 'info@deboerbouw.nl',
+            'name' => 'John Doe',
+            'contact_email' => 'john@example.com',
         ])
         ->assertRedirect(route('clients.index', $organization));
 
     $client = $organization->clients()->sole();
 
-    expect($client->name)->toBe('De Boer Bouw');
-    expect($client->contact_email)->toBe('info@deboerbouw.nl');
-    expect($client->contact_name)->toBeNull();
+    expect($client->name)->toBe('John Doe');
+    expect($client->contact_email)->toBe('john@example.com');
+    expect($client->contact_phone)->toBeNull();
     expect($client->public_id)->toHaveLength(5);
 });
 
-test('a name is required and a contact email must look like one', function () {
+test('a name and a contact email are both required', function () {
     $user = User::factory()->create();
     $organization = organizationWith($user);
 
     $this->actingAs($user)
-        ->post(route('clients.store', $organization), ['name' => '', 'contact_email' => 'not-an-email'])
+        ->post(route('clients.store', $organization), ['name' => '', 'contact_email' => ''])
         ->assertSessionHasErrors(['name', 'contact_email']);
 
     expect($organization->clients()->count())->toBe(0);
+});
+
+test('a contact email must look like one', function () {
+    $user = User::factory()->create();
+    $organization = organizationWith($user);
+
+    $this->actingAs($user)
+        ->post(route('clients.store', $organization), ['name' => 'John Doe', 'contact_email' => 'not-an-email'])
+        ->assertSessionHasErrors('contact_email');
+
+    expect($organization->clients()->count())->toBe(0);
+});
+
+test('the phone number is optional and two clients may share a contact email', function () {
+    $user = User::factory()->create();
+    $organization = organizationWith($user);
+
+    foreach (['First', 'Second'] as $name) {
+        $this->actingAs($user)
+            ->post(route('clients.store', $organization), [
+                'name' => $name,
+                'contact_email' => 'shared@example.com',
+            ])
+            ->assertSessionHasNoErrors();
+    }
+
+    expect($organization->clients()->count())->toBe(2);
 });
 
 test('a non-member cannot create a client in an organization', function () {
@@ -107,7 +134,7 @@ test('a non-member cannot create a client in an organization', function () {
     $organization = Organization::factory()->create();
 
     $this->actingAs($outsider)
-        ->post(route('clients.store', $organization), ['name' => 'Trojan'])
+        ->post(route('clients.store', $organization), ['name' => 'Trojan', 'contact_email' => 'trojan@example.com'])
         ->assertForbidden();
 
     expect($organization->clients()->count())->toBe(0);
@@ -119,7 +146,10 @@ test('a member can update a client', function () {
     $client = Client::factory()->create(['organization_id' => $organization->id, 'name' => 'Old']);
 
     $this->actingAs($user)
-        ->patch(route('clients.update', [$organization, $client]), ['name' => 'New'])
+        ->patch(route('clients.update', [$organization, $client]), [
+            'name' => 'New',
+            'contact_email' => $client->contact_email,
+        ])
         ->assertRedirect(route('clients.index', $organization));
 
     expect($client->fresh()->name)->toBe('New');
@@ -131,7 +161,10 @@ test('updating a client never changes its public id', function () {
     $client = Client::factory()->create(['organization_id' => $organization->id]);
     $publicId = $client->public_id;
 
-    $this->actingAs($user)->patch(route('clients.update', [$organization, $client]), ['name' => 'Renamed']);
+    $this->actingAs($user)->patch(route('clients.update', [$organization, $client]), [
+        'name' => 'Renamed',
+        'contact_email' => $client->contact_email,
+    ]);
 
     expect($client->fresh()->public_id)->toBe($publicId);
 });
@@ -142,7 +175,10 @@ test('a client of another organization cannot be reached through your own', func
     $theirClient = Client::factory()->create();
 
     $this->actingAs($user)
-        ->patch(route('clients.update', [$organization->handle, $theirClient->public_id]), ['name' => 'Hijacked'])
+        ->patch(route('clients.update', [$organization->handle, $theirClient->public_id]), [
+            'name' => 'Hijacked',
+            'contact_email' => 'attacker@example.com',
+        ])
         ->assertNotFound();
 
     expect($theirClient->fresh()->name)->not->toBe('Hijacked');
@@ -176,10 +212,16 @@ test('creating, updating and deleting a client each record an audit entry', func
     $user = User::factory()->create();
     $organization = organizationWith($user);
 
-    $this->actingAs($user)->post(route('clients.store', $organization), ['name' => 'Audited']);
+    $this->actingAs($user)->post(route('clients.store', $organization), [
+        'name' => 'Audited',
+        'contact_email' => 'audited@example.com',
+    ]);
     $client = $organization->clients()->sole();
 
-    $this->actingAs($user)->patch(route('clients.update', [$organization, $client]), ['name' => 'Audited twice']);
+    $this->actingAs($user)->patch(route('clients.update', [$organization, $client]), [
+        'name' => 'Audited twice',
+        'contact_email' => 'audited@example.com',
+    ]);
     $this->actingAs($user)->delete(route('clients.destroy', [$organization, $client]));
 
     $entries = AuditLogEntry::query()->where('organization_id', $organization->id)->orderBy('id')->get();

@@ -30,9 +30,12 @@ class SaveClientRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * Contact details are optional throughout: a client may be nothing but a name, which is how
-     * most of them will start. The email is validated for shape but deliberately not for
-     * uniqueness — two clients of the same agency can legitimately share a contact.
+     * A name and an email address are both required: a client with no way to reach them is a
+     * record that cannot be acted on, and every later feature that mails a client — reports,
+     * billing, ticketing (ADR-017) — would have to handle the gap. The phone number is optional.
+     *
+     * The email is validated for shape but deliberately not for uniqueness — two clients of the
+     * same agency can legitimately share a contact.
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -40,8 +43,7 @@ class SaveClientRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'contact_name' => ['nullable', 'string', 'max:255'],
-            'contact_email' => ['nullable', 'email', 'max:255'],
+            'contact_email' => ['required', 'email', 'max:255'],
             'contact_phone' => ['nullable', 'string', 'max:50'],
         ];
     }

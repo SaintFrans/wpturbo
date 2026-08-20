@@ -54,7 +54,7 @@ export default function SaveClientModal({
                             </DialogTitle>
                             <DialogDescription>
                                 Clients group the sites you build and maintain
-                                for one customer. Only the name is required.
+                                for one customer. A phone number is optional.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -66,27 +66,12 @@ export default function SaveClientModal({
                                     name="name"
                                     data-test="client-name"
                                     defaultValue={client?.name ?? ''}
-                                    placeholder="De Boer Bouw"
+                                    placeholder="John Doe"
                                     autoComplete="off"
                                     autoFocus
                                     required
                                 />
                                 <InputError message={errors.name} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="contact_name">
-                                    Contact person
-                                </Label>
-                                <Input
-                                    id="contact_name"
-                                    name="contact_name"
-                                    data-test="client-contact-name"
-                                    defaultValue={client?.contactName ?? ''}
-                                    placeholder="Optional"
-                                    autoComplete="off"
-                                />
-                                <InputError message={errors.contact_name} />
                             </div>
 
                             <div className="grid gap-2">
@@ -99,15 +84,19 @@ export default function SaveClientModal({
                                     type="email"
                                     data-test="client-contact-email"
                                     defaultValue={client?.contactEmail ?? ''}
-                                    placeholder="Optional"
+                                    placeholder="john@example.com"
                                     autoComplete="off"
+                                    required
                                 />
                                 <InputError message={errors.contact_email} />
                             </div>
 
                             <div className="grid gap-2">
                                 <Label htmlFor="contact_phone">
-                                    Phone number
+                                    Phone number{' '}
+                                    <span className="font-normal text-muted-foreground">
+                                        (optional)
+                                    </span>
                                 </Label>
                                 <Input
                                     id="contact_phone"

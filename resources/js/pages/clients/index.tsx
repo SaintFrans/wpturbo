@@ -84,7 +84,7 @@ export default function ClientsIndex({
                         {clients.length === 0 ? (
                             <EmptyState
                                 title="No clients yet"
-                                description="Add the customers you build and maintain sites for. A name is enough to start with."
+                                description="Add the customers you build and maintain sites for. A name and an email address is all it takes."
                                 illustration={
                                     <Building2 className="size-10 text-muted-foreground" />
                                 }
@@ -107,9 +107,6 @@ export default function ClientsIndex({
                                         <tr className="border-b border-border text-left text-muted-foreground">
                                             <th className="px-4 py-2.5 font-medium">
                                                 Name
-                                            </th>
-                                            <th className="px-4 py-2.5 font-medium">
-                                                Contact
                                             </th>
                                             <th className="px-4 py-2.5 font-medium">
                                                 Email
@@ -136,21 +133,12 @@ export default function ClientsIndex({
                                                     {client.name}
                                                 </td>
                                                 <td className="px-4 py-3 text-muted-foreground">
-                                                    {client.contactName ?? '—'}
-                                                </td>
-                                                <td className="px-4 py-3 text-muted-foreground">
-                                                    {client.contactEmail ? (
-                                                        <a
-                                                            href={`mailto:${client.contactEmail}`}
-                                                            className="hover:text-foreground hover:underline"
-                                                        >
-                                                            {
-                                                                client.contactEmail
-                                                            }
-                                                        </a>
-                                                    ) : (
-                                                        '—'
-                                                    )}
+                                                    <a
+                                                        href={`mailto:${client.contactEmail}`}
+                                                        className="hover:text-foreground hover:underline"
+                                                    >
+                                                        {client.contactEmail}
+                                                    </a>
                                                 </td>
                                                 <td className="px-4 py-3 text-muted-foreground">
                                                     {client.contactPhone ?? '—'}

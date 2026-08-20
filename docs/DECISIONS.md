@@ -91,8 +91,12 @@ to that client, so it stays with Owner and Admin, which is also the shape ADR-03
   touches no customer server, which are the three triggers in §5 rule 8. A member could create
   clients in bulk; the blast radius is rows in one tenant's own table. Revisit if it becomes a
   support problem.
-- **`contact_email` is validated for shape, not uniqueness.** Two clients of one agency can share
-  a contact person, and a uniqueness constraint would be wrong rather than merely strict.
+- **A client is `name` + `contact_email` + optional `contact_phone`.** Both of the first two are
+  required: a client nothing can reach is a record nothing can act on, and every later feature that
+  mails one would carry the gap. `contact_email` is validated for shape, **not** for uniqueness —
+  two clients of one agency can share a contact person, so a unique index would be wrong rather
+  than merely strict. There is deliberately no separate contact-person name: a client is as often a
+  person as a company, and a second name field made every record ask which of the two it was.
 - Route binding uses `scopeBindings()`, so `{client}` resolves through the organization's own
   relation. A client belonging to another tenant is a 404 at the router, not something a controller
   method has to remember.

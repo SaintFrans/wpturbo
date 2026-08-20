@@ -28,8 +28,9 @@ return new class extends Migration
             $table->char('public_id', 5)->unique();
 
             $table->string('name');
-            $table->string('contact_name')->nullable();
-            $table->string('contact_email')->nullable();
+            // Required in validation, so nullable here would be a second source of truth. The
+            // phone is genuinely optional.
+            $table->string('contact_email');
             $table->string('contact_phone')->nullable();
             $table->timestamps();
 

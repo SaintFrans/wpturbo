@@ -3,8 +3,7 @@ export type Client = {
     // client route is keyed by.
     id: string;
     name: string;
-    contactName: string | null;
-    contactEmail: string | null;
+    contactEmail: string;
     contactPhone: string | null;
     createdAt: string | null;
 };
