@@ -297,7 +297,7 @@ Non-negotiable, and applied whether or not the task mentions security.
    relationship (`$organization->servers()->find($id)`), never loaded globally and then checked. A
    post-load check that anyone forgets is an isolation failure; a scoped query that anyone forgets
    is a 404.
-2. **Every tenant-owned table carries `organization_id`.** `Client` (ADR-017), `Site` and
+2. **Every tenant-owned table carries `organization_id`.** `Client` (ADR-017, built), `Site` and
    everything under it hang off `Organization`, not off each other. Ownership is a column, not
    an inference across joins. `audit_log_entries` (ADR-032) is the one deliberate exception to a
    _constrained_ foreign key, not to the column itself: it must outlive the organization's eventual
@@ -314,8 +314,13 @@ Non-negotiable, and applied whether or not the task mentions security.
 6. **Encrypt credentials at rest.** Anything granting access to a customer server is
    encrypted in the database, and never logged.
 7. **Non-sequential route keys for tenant resources**, for the same enumeration reasons the
-   organization handle is a handle and not an ID. Reuse the `GeneratesHandle` trait rather than
-   inventing a second scheme ([ADR-030](DECISIONS.md)).
+   organization handle is a handle and not an ID. There are exactly two schemes, and the choice
+   between them is settled: `GeneratesHandle` ([ADR-030](DECISIONS.md)) for anything occupying the
+   tenant segment of the URL, where the value is read, shared and typed by people;
+   `GeneratesPublicId` ([ADR-038](DECISIONS.md)) — five random characters, no history table — for
+   resources addressed _inside_ `/org/{organization}/`, where a reissued key can only ever resolve
+   to another record of the same tenant. Inventing a third scheme needs an ADR. Neither key is
+   ever an authorisation factor: reads still go through the organization relationship.
 8. **New endpoints that send mail, cost money, or touch a customer server get a rate
    limiter**, decided deliberately rather than by omission.
 9. **Every change states its security consideration**, even when the conclusion is "no

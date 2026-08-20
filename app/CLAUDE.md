@@ -40,12 +40,20 @@ decision — ask first.
 
 ### Route keys
 
-Tenant resources are addressed by a readable `handle`, seeded from the name once at creation and
-then independent of it ([ADR-030](../docs/DECISIONS.md)). `Organization` gets one from the
-`GeneratesHandle` trait; reuse that trait for `Site`, `Server` and `Client` rather than inventing a
-second scheme.
+Two schemes, and the choice between them is settled — do not invent a third.
 
-Three rules come with it, and each exists because of a specific failure:
+**`GeneratesPublicId`** ([ADR-038](../docs/DECISIONS.md)) for resources addressed _inside_
+`/org/{organization}/…`: five random characters, assigned on create, checked against soft-deleted
+rows, no history table. `Client` uses it; `Site`, `Server` and `Domain` should too. Not the row id,
+which would publish the platform's own scale in every URL, and not a handle, because nobody
+navigates to a client by guessing its slug.
+
+**`GeneratesHandle`** for the tenant segment itself — today that means `Organization` alone. A
+readable `handle`, seeded from the name once at creation and then independent of it
+([ADR-030](../docs/DECISIONS.md)).
+
+Three rules come with the handle, and each exists because of a specific failure. The first two
+apply to public ids as well:
 
 - **Seeded on `creating` only.** No `updating` hook keyed on the name — renaming must never change
   a URL. That coupling is what silently broke every bookmark before ADR-030.

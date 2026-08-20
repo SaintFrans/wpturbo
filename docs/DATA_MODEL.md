@@ -1,12 +1,13 @@
 # Data model
 
-_Last verified against the migrations and models: 2026-08-18._
+_Last verified against the migrations and models: 2026-08-20._
 
-Six tables carry the domain today: `users`, `organizations`, `organization_handles`,
-`organization_members`, `organization_invitations`, `audit_log_entries`. Everything else in the
-database is framework scaffolding (cache, jobs, sessions, passkeys, password reset tokens).
+Seven tables carry the domain today: `users`, `organizations`, `organization_handles`,
+`organization_members`, `organization_invitations`, `audit_log_entries`, `clients`. Everything else
+in the database is framework scaffolding (cache, jobs, sessions, passkeys, password reset tokens).
 
-There is **no** entity for servers, sites, agents, deployments or billing. The hosting domain is
+There is **no** entity for servers, sites, agents, deployments or billing. `Client` is the first
+piece of the hosting domain to exist, and it is the piece that hosts nothing — the rest is still
 unmodelled.
 
 ## Entity map
@@ -31,6 +32,16 @@ unmodelled.
                     │ user_id              │        └──────────────────────┘
                     │ role                 │  UNIQUE(organization_id, user_id)
                     └──────────────────────┘  owner | admin | member
+
+                          ┌──────────────────────────┐
+                          │          Client          │
+                          ├──────────────────────────┤
+        Organization ◀────┤ organization_id          │
+                          │ public_id  (unique)      │ ← the route key, 5 random chars
+                          │ name                     │
+                          │ contact_* (all nullable) │
+                          │ deleted_at               │
+                          └──────────────────────────┘
 
                           ┌──────────────────────────┐
                           │ OrganizationInvitation   │
@@ -206,6 +217,47 @@ it — they would also need control of the invited mailbox. Deliberate; see
 `routes/console.php`. An unbounded pending invitation is a standing grant of access to a tenant,
 held by an address that may change hands.
 
+### Client
+
+`clients` ([ADR-017](DECISIONS.md), keyed per [ADR-038](DECISIONS.md)). Soft-deleted. Route key is
+`public_id`. `App\Models\Clients\Client`.
+
+A customer of the organization, used to group the sites built and maintained for them. **Not** a
+tenancy boundary and not a login: no membership, no role, no account. Every member of the owning
+organization sees every client in it (ADR-037).
+
+| Column                                           | Notes                                                       |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| `organization_id`                                | FK, `cascadeOnDelete`. The owning tenant (ADR-019)          |
+| `public_id`                                      | **Unique.** Five random characters, assigned once on create |
+| `name`                                           | Required, max 255. Free text                                |
+| `contact_name`, `contact_email`, `contact_phone` | All nullable — a client may be nothing but a name           |
+| `deleted_at`                                     | Soft delete                                                 |
+
+**Why the route key is a random id and not a handle.** A handle earns its cost in the tenant
+segment of the URL, where people read and share it. Nobody guesses their way to a client. The row
+id was rejected for a different reason: a sequential key publishes how many clients exist across
+the whole platform. Five random characters say nothing and cost one loop
+([ADR-038](DECISIONS.md)).
+
+**Why there is no `client_handles` table.** `organization_handles` prevents a released handle from
+being claimed by a _different tenant_, which would point stale bookmarks at another agency's data.
+A client id sits inside `/org/{organization}/`, already behind `EnsureOrganizationMembership`, so a
+reissued id could only ever resolve to another client of the same organization. `GeneratesPublicId`
+checks the live column and soft-deleted rows, and that is the whole guarantee.
+
+**Why the table soft-deletes but the delete button does not.** Deleting an organization takes its
+whole tree down together, so restoring it restores a coherent organization (ADR-019, ADR-034) —
+that is what `deleted_at` is for here. Deleting one client is an individual, explicit,
+permission-gated act, so `ClientController::destroy` calls `forceDelete()`. The same asymmetry
+memberships and invitations already have.
+
+**Contact details are validated for shape, never for uniqueness.** Two clients of one agency
+legitimately share a contact person.
+
+**`Site.client_id` does not exist yet**, because `Site` does not. When it arrives it is nullable —
+a site need not belong to a client (ADR-017, ADR-018).
+
 ### AuditLogEntry
 
 `audit_log_entries` ([ADR-032](DECISIONS.md)). `App\Models\Audit\AuditLogEntry` — its own domain,
@@ -258,9 +310,17 @@ role to permission set.
 | `member:remove`       |  ✅   |  ✅¹  |   —    |
 | `invitation:create`   |  ✅   |  ✅¹  |   —    |
 | `invitation:cancel`   |  ✅   |  ✅   |   —    |
+| `client:create`       |  ✅   |  ✅   |   ✅   |
+| `client:update`       |  ✅   |  ✅   |   ✅   |
+| `client:delete`       |  ✅   |  ✅   |   —    |
 | `audit_log:view`      |  ✅   |  ✅   |   —    |
 
 ¹ Only against a role ranking **strictly below** the actor's own ([ADR-028](DECISIONS.md)).
+
+**The client permissions are the first any Member holds** ([ADR-038](DECISIONS.md)). A client is an
+organisational label, and withholding it would only mean the person doing the work asking someone
+else to type a customer's name. Deleting one regroups everything tagged to it, so that stays with
+Owner and Admin.
 
 **Why permissions are separate from roles.** Checks in policies and controllers ask "does this user
 hold `member:remove`?", never "is this user an admin?". Adding a role, or moving a capability
@@ -291,7 +351,7 @@ currently unused by any route.
 Two readonly DTOs in `app/Data/Organizations/` shape what crosses into React:
 
 - `UserOrganization` — id, name, handle, isPersonal, role, roleLabel, isCurrent
-- `OrganizationPermissions` — eight booleans, one per `OrganizationPermission`
+- `OrganizationPermissions` — eleven booleans, one per `OrganizationPermission`
 
 `HandleInertiaRequests` shares `currentOrganization` and `organizations` as lazy props on every
 page.
@@ -318,9 +378,11 @@ When Servers and Sites are added:
 2. Access is scoped at query time via the organization relationship, never by loading and then
    filtering in PHP.
 3. Route keys for tenant resources are non-sequential, for the same enumeration reasons the
-   organization handle is. [ADR-030](DECISIONS.md) settles this with one shared implementation:
-   the `GeneratesHandle` trait built for `Organization` is reused by `Site`, `Server` and `Client`
-   rather than each table re-deciding.
+   organization handle is. There are two shared implementations and no third:
+   `GeneratesHandle` ([ADR-030](DECISIONS.md)) for anything occupying the tenant segment of the
+   URL, and `GeneratesPublicId` ([ADR-038](DECISIONS.md)) — five random characters, no history
+   table — for resources addressed _inside_ it. `Client` uses the second; `Site`, `Server` and
+   `Domain` should too unless someone makes the case for a readable, editable key.
 4. Anything holding a credential to reach a customer server is encrypted at rest, and is never
    exposed through an Inertia prop.
 
@@ -334,7 +396,7 @@ sensitive actions (`site:delete`, `client:delete`, `server:delete`, …) are add
 `OrganizationPermission` as each entity is built, following the existing role→permission model
 (ADR-005, ADR-028), not a new grant table.
 
-Two of the entities coming next are already decided, though not yet built — see
+`Client` is built (see above). The two entities after it are decided but not built — see
 [ADR-017](DECISIONS.md) and [ADR-018](DECISIONS.md):
 
 - **`Client`** — owned by an `Organization`, not a tenancy level. `Site` (and later `Domain`,

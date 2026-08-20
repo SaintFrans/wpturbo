@@ -77,16 +77,32 @@ note for what was added beyond the original decision.
 tasks that enforce them do not exist yet. Real work, but small, and not on the critical path to the
 agent — slot it in with G3 whenever there is room.
 
-### 3 — Build `Client`, `Server`, `Site`
+### 3 — Build `Client`, `Server`, `Site` — `Client` done 2026-08-20
 
-[Q13](DECISIONS.md) is settled: [ADR-037](DECISIONS.md) confirms every member sees everything in
+Built in phases, smallest and least entangled first. **`Client` is done**: table, model, the three
+permissions, policy, a Clients area with an overview table, create/edit/delete, three audit
+actions, 16 feature tests. It was first because it is the only one of the three that depends on
+nothing — `Server` immediately raises enrolment fields that [Q2](OPEN_QUESTIONS.md) has not
+answered, and `Site` needs `Client` for its `client_id`.
+
+One decision came out of it, [ADR-038](DECISIONS.md): a client is addressed by a five-character
+random `public_id`, not a handle and not the row id. That reverses ADR-030's closing suggestion for
+everything below the tenant segment, so `Server` and `Site` should follow `Client` here rather than
+`Organization`.
+
+**Deliberately not built yet**, and each cheap to add when there is a reason: a client detail page
+(the overview table is enough while a client holds nothing), search or pagination on the list, and
+anything billing- or ticketing-shaped — ADR-017 named those as the motivating future uses and
+explicitly left them out of scope.
+
+`Server` and `Site` remain. [Q13](DECISIONS.md) is settled: [ADR-037](DECISIONS.md) confirms every member sees everything in
 their organization. `Server::query()` and `Site::query()` are scoped by `organization_id` alone,
 the same as every other tenant-owned table — no visibility helper, no scope-by-membership
 indirection. What differs by role is capability: destructive actions (`site:delete`,
 `client:delete`, `server:delete`, …) are new `OrganizationPermission` cases, mapped per role
 exactly like the existing ones.
 
-The entities themselves are already designed: [ADR-017](DECISIONS.md) for `Client`,
+The entities themselves are already designed: [ADR-017](DECISIONS.md) for `Client` (built),
 [ADR-018](DECISIONS.md) for `Site` and `SiteService`, [ADR-019](DECISIONS.md) for ownership and
 deletion, [ADR-030](DECISIONS.md) for route keys via the `GeneratesHandle` trait.
 

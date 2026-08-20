@@ -50,6 +50,9 @@ export type OrganizationPermissions = {
     canRemoveMember: boolean;
     canCreateInvitation: boolean;
     canCancelInvitation: boolean;
+    canCreateClient: boolean;
+    canUpdateClient: boolean;
+    canDeleteClient: boolean;
     canViewAuditLog: boolean;
 };
 

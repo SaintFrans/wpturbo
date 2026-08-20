@@ -162,6 +162,7 @@ class OrganizationController extends Controller
 
             // The whole tree soft-deletes together, so a restore is a coherent organization
             // rather than an empty shell (ADR-034). Audit entries deliberately stay outside it.
+            $organization->clients()->delete();
             $organization->invitations()->delete();
             $organization->memberships()->delete();
             $organization->delete();

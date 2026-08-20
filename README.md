@@ -2,9 +2,10 @@
 
 A control plane for managed and semi-managed WordPress hosting.
 
-> **Status: early.** The account, authentication and team layer is built and tested. The
-> hosting domain — servers, sites, the agent, provisioning, monitoring — does not exist in
-> the codebase yet. See [Status](#status) for the honest breakdown.
+> **Status: early.** The account, authentication and organization layer is built and tested, and
+> so is `Client`, the first resource domain. The rest of the hosting domain — servers, sites, the
+> agent, provisioning, monitoring — does not exist in the codebase yet. See
+> [Status](#status) for the honest breakdown.
 
 ## What this is
 
@@ -51,14 +52,18 @@ intended constraint, not an implemented one. See
 
 - **Authentication** — registration, login, password reset, email verification, two-factor
   authentication (TOTP + recovery codes) and passkeys, all via Laravel Fortify.
-- **Teams** — creation, renaming, deletion, leaving, and switching between teams. Every
-  user gets a personal team on registration.
+- **Organizations** — creation, renaming, deletion, leaving, and switching between them. Every
+  user gets one at registration, named after them; there is no separate "personal" kind, and
+  nobody can be left without one (ADR-025).
 - **Roles and permissions** — Owner, Admin and Member, backed by a permission enum and a
   policy rather than by string comparisons.
+- **Clients** — the customers an agency works for, as a tenant-owned grouping entity: an
+  overview table, create, edit and delete, keyed in the URL by a short random id. Not a login and
+  not a tenancy level. Nothing hangs off a client yet, because `Site` does not exist.
 - **Invitations** — email invitations with a 3-day expiry, accept and decline flows, and a
   daily scheduled job that prunes expired invitations.
 - **Settings** — profile, security and appearance.
-- **Tooling** — Pest test suite (93 tests), Pint, Larastan, and the Vite+ toolchain (Oxlint,
+- **Tooling** — Pest test suite (155 tests), Pint, Larastan, and the Vite+ toolchain (Oxlint,
   Oxfmt) with a pre-commit hook, all wired into a GitHub Actions workflow.
 
 ### In development
@@ -67,10 +72,11 @@ Nothing. There is no partially-built hosting feature in the tree.
 
 ### Open
 
-The entire hosting domain, and one naming question that blocks part of the data model:
-the existing "Teams" feature may be the wrong name for what it needs to become. This is
-tracked, along with everything else undecided, in
-[docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
+`Server`, `Site` and the agent. One question blocks the agent and is deliberately unanswered:
+how a server proves which tenant it belongs to, how agent credentials are rotated and revoked,
+and what isolates one tenant's NATS subjects from another's. That, and everything else undecided,
+is tracked in [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md);
+[docs/MVP_PLAN.md](docs/MVP_PLAN.md) has the order the rest is being built in.
 
 ## Getting started
 

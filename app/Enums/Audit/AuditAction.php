@@ -13,6 +13,10 @@ enum AuditAction: string
     case MemberRemoved = 'member.removed';
     case MemberLeft = 'member.left';
 
+    case ClientCreated = 'client.created';
+    case ClientUpdated = 'client.updated';
+    case ClientDeleted = 'client.deleted';
+
     case OrganizationDeleted = 'organization.deleted';
 
     /**
@@ -28,6 +32,9 @@ enum AuditAction: string
             self::MemberRoleUpdated => 'Member role updated',
             self::MemberRemoved => 'Member removed',
             self::MemberLeft => 'Member left',
+            self::ClientCreated => 'Client created',
+            self::ClientUpdated => 'Client updated',
+            self::ClientDeleted => 'Client deleted',
             self::OrganizationDeleted => 'Organization deleted',
         };
     }

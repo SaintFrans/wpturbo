@@ -225,8 +225,9 @@ servers that the platform manages (first), and a fully managed tier on our own
 infrastructure (later). Management happens through a Go agent on each server that connects
 outbound over NATS JetStream.
 
-**Almost none of that exists yet.** What is built is the account, authentication and team
-layer. There is no Server, Site or Agent model, no queued work, no NATS. Do not assume any
+**Almost none of that exists yet.** What is built is the account, authentication and organization
+layer, plus `Client` — the first resource domain, and the one that hosts nothing. There is no
+Server, Site or Agent model, no queued provisioning, no NATS. Do not assume any other
 hosting-domain code exists — verify before referencing it. See [README.md](README.md) and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -319,9 +320,10 @@ Decided, see [ADR-025](docs/DECISIONS.md), [ADR-017](docs/DECISIONS.md) and
   organization named after the user, renameable from settings. Every user still always has at
   least one: you cannot leave or delete your last one, and `EnsureUserHasOrganization` creates one
   for you if your last membership is removed by someone else.
-- **`Client` is a new entity owned by an `Organization`**, not a tenancy boundary. It has no
-  membership or login of its own. `Site` (and later `Domain`, `Mailbox`) carries a nullable
-  `client_id` for grouping, reporting, and future billing/ticketing.
+- **`Client` is an entity owned by an `Organization`**, not a tenancy boundary. It has no
+  membership or login of its own. **Built on 2026-08-20** — model, three permissions, policy, a
+  Clients area with an overview table, audit entries. `Site` (and later `Domain`, `Mailbox`) will
+  carry a nullable `client_id` for grouping, reporting, and future billing/ticketing.
 - **The hosted resource is `Site`**, with a required `type` column (`wordpress` at launch).
   Multi-process types get child `SiteService` rows; single-process types have none.
 
@@ -333,8 +335,9 @@ Four more decisions are accepted and equally unimplemented:
 - **The URL identifier is a `handle`** ([ADR-030](docs/DECISIONS.md)), seeded from the name once
   at creation and then independent of it. Renaming never changes a URL; changing the handle is a
   separate, explicit action that does break existing links. A handle is never reissued —
-  uniqueness spans the live column, soft-deleted rows and `organization_handles`. Reuse
-  `GeneratesHandle` for `Site`, `Server` and `Client`.
+  uniqueness spans the live column, soft-deleted rows and `organization_handles`. `GeneratesHandle`
+  is for the tenant segment only: resources addressed _inside_ it take `GeneratesPublicId` instead
+  — five random characters, no history table ([ADR-038](docs/DECISIONS.md)).
 - **Recovering an abandoned organization is a manual, documented procedure**
   ([ADR-029](docs/DECISIONS.md)), not a self-service takeover.
 - **Every member sees everything in their organization** ([ADR-037](docs/DECISIONS.md)).
@@ -344,15 +347,15 @@ Four more decisions are accepted and equally unimplemented:
 
 **This is implemented.** The rename and the handle change landed on 2026-08-17 (all six phases,
 recorded in [ADR-025](docs/DECISIONS.md) through [ADR-031](docs/DECISIONS.md)); `composer
-ci:check` is green on 120 tests. **Nothing from ADR-025 through ADR-031 is left unimplemented.**
+ci:check` is green on 155 tests. **Nothing from ADR-025 through ADR-031 is left unimplemented.**
 
 - **Admins manage members ranking below their own role** ([ADR-028](docs/DECISIONS.md)) — Members
   only, never another Admin or the Owner, and never inviting above Member. The bound is on the
   _role_, not just the action.
 
-Do the rest before `Site`, `Server` or `Client` exist; every new domain multiplies the work. The
-plan carries the remaining steps, the security review, and a list of the six things the plan
-itself got wrong the first time.
+`Client` was the first of the three to be built, because it depends on nothing. `Server` and `Site`
+remain, and `Server` waits on [Q2](docs/OPEN_QUESTIONS.md). The plan carries the remaining steps,
+the security review, and a list of the six things the plan itself got wrong the first time.
 
 Do not re-litigate these. Raise it again only if new information genuinely contradicts one
 of the ADRs above.

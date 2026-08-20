@@ -5,6 +5,7 @@ namespace App\Models\Organizations;
 use App\Concerns\Organizations\GeneratesHandle;
 use App\Enums\Organizations\OrganizationRole;
 use App\Models\Audit\AuditLogEntry;
+use App\Models\Clients\Client;
 use App\Models\User;
 use Database\Factories\Organizations\OrganizationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -23,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
+ * @property-read Collection<int, Client> $clients
  * @property-read Collection<int, OrganizationInvitation> $invitations
  * @property-read Collection<int, Membership> $memberships
  * @property-read Collection<int, User> $members
@@ -90,6 +92,16 @@ class Organization extends Model
     public function memberships(): HasMany
     {
         return $this->hasMany(Membership::class);
+    }
+
+    /**
+     * Get all clients of this organization.
+     *
+     * @return HasMany<Client, $this>
+     */
+    public function clients(): HasMany
+    {
+        return $this->hasMany(Client::class);
     }
 
     /**

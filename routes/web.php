@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Clients\ClientController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Organizations\AuditLogController;
 use App\Http\Controllers\Organizations\OrganizationController;
@@ -41,6 +42,19 @@ Route::prefix('org/{organization}')
     ->middleware(['auth', 'verified', EnsureOrganizationMembership::class])
     ->group(function () {
         Route::get('dashboard', DashboardController::class)->name('dashboard');
+
+        /*
+         * Clients (ADR-017). `scopeBindings` is what makes the second parameter resolve through
+         * the first: `{client}` is looked up on the organization's own clients relation, so a
+         * client belonging to another tenant is a 404 at the router rather than something a
+         * controller has to remember to check.
+         */
+        Route::name('clients.')->scopeBindings()->group(function () {
+            Route::get('clients', [ClientController::class, 'index'])->name('index');
+            Route::post('clients', [ClientController::class, 'store'])->name('store');
+            Route::patch('clients/{client}', [ClientController::class, 'update'])->name('update');
+            Route::delete('clients/{client}', [ClientController::class, 'destroy'])->name('destroy');
+        });
 
         Route::name('organizations.')->group(function () {
             Route::post('switch', [OrganizationController::class, 'switch'])->name('switch');

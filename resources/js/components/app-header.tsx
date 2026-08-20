@@ -20,6 +20,7 @@ import { UserMenuContent } from '@/components/user-menu-content';
 import { useInitials } from '@/hooks/use-initials';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
+import { index as clients } from '@/routes/clients';
 import { edit as organizationSettings } from '@/routes/organizations';
 import type { NavItem } from '@/types';
 
@@ -53,6 +54,11 @@ export function AppHeader() {
         { title: 'Overview', href: dashboardUrl, icon: null },
         ...(currentOrganization
             ? [
+                  {
+                      title: 'Clients',
+                      href: clients(currentOrganization.handle),
+                      icon: null,
+                  },
                   {
                       title: 'Settings',
                       href: organizationSettings(currentOrganization.handle),

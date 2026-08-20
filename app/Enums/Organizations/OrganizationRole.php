@@ -32,9 +32,19 @@ enum OrganizationRole: string
                 OrganizationPermission::RemoveMember,
                 OrganizationPermission::CreateInvitation,
                 OrganizationPermission::CancelInvitation,
+                OrganizationPermission::CreateClient,
+                OrganizationPermission::UpdateClient,
+                OrganizationPermission::DeleteClient,
                 OrganizationPermission::ViewAuditLog,
             ],
-            self::Member => [],
+            // Members are the first role to hold a capability at all. A client is an
+            // organisational label, so keeping it in administrators' hands would only mean
+            // members asking someone else to type a name. Deleting one regroups every site
+            // tagged to it, so that stays above them (ADR-038).
+            self::Member => [
+                OrganizationPermission::CreateClient,
+                OrganizationPermission::UpdateClient,
+            ],
         };
     }
 
