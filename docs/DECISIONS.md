@@ -26,6 +26,168 @@ Format:
 
 ---
 
+## ADR-041 — Pricing scales on billable sites; capabilities are never gated
+
+**2026-08-22** · **Status**: Accepted. Depends on
+[ADR-039](#adr-039--hestri-sells-a-control-plane-never-infrastructure).
+
+**Decision** — Hestri is priced on one dimension: the number of **billable sites** an organization
+manages, in declining marginal bands with no plan tiers and no cliffs. Servers, team members,
+clients, staging environments and development copies are free and unlimited. **Every account has
+every capability at every volume** — no feature is withheld to manufacture an upgrade. The only
+legitimate second charge is a _consumption_ meter for something that costs us money per unit; the
+one candidate, backup storage, is unresolved ([Q14](OPEN_QUESTIONS.md)) and may prove unnecessary.
+
+A site is billable when it is in a production state with a live domain attached. Staging copies,
+suspended sites and sites still provisioning are never counted. Full definition and the price
+bands are in [BUSINESS_MODEL.md](BUSINESS_MODEL.md) §4–5.
+
+**Alternatives** — Per-server pricing, which the whole category uses (Forge, Ploi, SpinupWP,
+GridPane) and which stops scaling the moment an agency adds sites to servers it already has.
+Per-site plans with hard site caps, the per-site-host shape, which puts a cliff at every cap and
+makes site _n+1_ cost a whole upgrade. Tiered plans with white-labelling and client access gated
+to the top tier — sketched first and rejected on the grounds below. Usage-based pricing on CPU, RAM
+or bandwidth, rejected because on bring-your-own-server the customer has already paid their own
+provider for exactly that, and billing it again is double-dipping.
+
+**Why** — Sites are both the unit that scales with the customer's business and the unit agencies
+already bill their own clients in, so the cost becomes a line item they pass through rather than an
+overhead they resent. Servers are free because they cost us nothing and charging for them would
+penalise density, which is the product's central economic advantage over per-site hosts.
+
+Gating capabilities was rejected for a reason worth keeping: withholding something that costs us
+nothing, in order to sell it back, is the practice this product is positioned against, and the
+banded curve already makes large agencies pay proportionately more without it. A five-hundred-site
+agency pays roughly seven times what a forty-site agency pays. Volume does the work that feature
+gates would otherwise do, and the pricing page needs no comparison table.
+
+The cost we accept: no upsell lever. Every euro of revenue growth has to come from site count,
+which means the bands must be right rather than merely plausible, and it means a large customer
+using every feature at a low volume is underpriced by design. We would rather be underpriced there
+than run an upgrade-prompt product.
+
+**Consequences**
+
+- `Site` must make its lifecycle states — production, staging, provisioning, suspended —
+  unambiguous and queryable from the first migration, with no interpretation needed. They are the
+  basis of an invoice.
+- Those transitions are financially motivated, so each is permission-gated
+  ([ADR-005](#adr-005--permissions-are-an-enum-decoupled-from-roles)) and written to the audit log
+  ([ADR-032](#adr-032--an-append-only-audit-log-built-now-while-there-are-five-events)).
+- A real **suspend** action is required, not delete-and-reinstall, because suspension is the
+  mechanism by which a site stops being billable.
+- No second site class (a cheaper "lite" tier) may be introduced without revisiting the
+  billable-site definition, which is why one is deliberately not planned.
+- Nothing about metering, plans, subscriptions, invoicing or payment is in the near-term build. The
+  definitions live in the schema; the billing that reads them does not yet exist.
+- Client-facing access cannot be promised as part of "every capability" while
+  [ADR-017](#adr-017--clients-are-a-grouping-entity-inside-a-team-not-a-second-tenancy-level) gives
+  `Client` no login. See [Q15](OPEN_QUESTIONS.md).
+
+---
+
+## ADR-040 — Sites are containers on customer VPS instances, not elastic cloud
+
+**2026-08-22** · **Status**: Accepted. Follows from
+[ADR-039](#adr-039--hestri-sells-a-control-plane-never-infrastructure).
+
+**Decision** — Sites run as per-site isolated containers on ordinary cloud VPS instances supplied
+by the customer. The platform does not orchestrate elastic compute, does not run Kubernetes, and
+does not meter per-request usage. Capacity changes are handled by three control-plane actions
+instead: showing per-server headroom with per-site attribution, vertical resize through the
+provider API, and moving a site between servers.
+
+**Alternatives** — A cloud-native model where sites autoscale and the customer pays only for what
+they consume, so that nobody outgrows a server.
+
+**Why** — [ADR-039](#adr-039--hestri-sells-a-control-plane-never-infrastructure) largely settles
+it: you cannot ask a stranger to bring their own Kubernetes cluster, only a Linux box with root, so
+elastic orchestration and bring-your-own-server are incompatible.
+
+The rest is that the problem it solves has largely gone away and the cure is expensive.
+Vertical resize on every major VPS provider is now an API call plus a reboot, so "outgrowing a
+server" is a button rather than a migration. WordPress is a poor fit for elastic compute in four
+independent ways — it writes to its own filesystem, every site needs a database, scale-to-zero
+puts cold starts on the lowest-traffic sites, and PHP-FPM is a persistent pool rather than
+per-request compute. And elastic compute costs roughly 3–5× VPS pricing per unit of sustained
+capacity, against a long tail of low-but-constant load: the worst possible case for it. Twenty-five
+sites on one ~€50 box is the entire argument against per-site hosts, and elasticity spends it.
+
+Operationally, orchestration is a full-time job. Choosing it pre-MVP, solo, with `Server` unbuilt,
+means shipping a year later.
+
+**Consequences**
+
+- Per-site isolation on a shared box is a hard requirement, not a refinement. Density means one
+  compromised WordPress install sits beside every other on the machine, so: separate unix user per
+  site, per-site PHP-FPM pool, per-site database user, no cross-readable webroots. Under
+  [SECURITY.md](SECURITY.md) §0 this is not tradeable for convenience.
+- `Site` must not be welded to one `Server`. Moving a site between servers is a first-class
+  operation, which the navigation model in
+  [ADR-016](#adr-016--top-navigation-for-areas-contextual-navigation-for-resources) already
+  anticipated by making sites listable across servers.
+- Multi-server organizations are the normal case from the start, not a scaling feature.
+- Per-server headroom reporting is on the MVP path, because on infrastructure we do not own it is
+  also the answer to who is responsible for a slow site.
+- Reconsider only if the fully managed tier of
+  [ADR-039](#adr-039--hestri-sells-a-control-plane-never-infrastructure) is ever built, since that
+  is the case where we own the capacity pool and absorb the spikes.
+
+---
+
+## ADR-039 — Hestri sells a control plane, never infrastructure
+
+**2026-08-22** · **Status**: Accepted. Replaces the "two tiers, semi-managed first" framing in
+[README.md](../README.md).
+
+**Decision** — Hestri sells software that manages servers the customer owns. It does not buy,
+resell or bill for infrastructure. Bring-your-own-server is the product, not the first of two
+tiers. A fully managed tier remains conceivable but is explicitly **not a plan**, and its only
+claim on the present is one field: `Server` records the provenance of the machine — who owns it and
+who pays for it — and **nothing downstream may branch on that value**. Not the agent, not
+provisioning, not `Site`.
+
+**Alternatives** — Running our own infrastructure and reselling capacity, either instead of or
+alongside bring-your-own-server. Building the abstraction for both now, on the reasoning that
+managing someone else's server is the same work as managing our own.
+
+**Why** — The engineering genuinely is nearly identical; the business is not. Reselling adds three
+subsystems containing no interesting engineering — reseller billing with its working capital,
+dunning and merchant-of-record VAT exposure; capacity and procurement; and 24/7 uptime liability,
+which for a solo founder means owning outages on holiday and while ill.
+
+Against that, bring-your-own-server converts the hardest objection into the easiest sale. "Put your
+clients' businesses on infrastructure owned by a company you have never heard of" is unbuyable from
+a one-person operation, and rightly so. "Install an agent on your own server, cancel any time, and
+if we vanish your sites keep serving" costs a stranger almost nothing to try. The market bears this
+out without exception: every control plane sold by a small team is bring-your-own-server (Forge,
+Ploi, RunCloud, SpinupWP, GridPane); every managed host is a venture- or agency-scale operation
+with a support rota.
+
+It also reframes who the reseller is. An agency wanting to sell managed hosting to its own clients
+should buy the server, bill the client, keep the margin and carry the liability — a business that
+works at agency scale. Selling that agency the tool is a larger market than competing with per-site
+hosts on price, and it makes white-labelling a first-class concern.
+
+Building the abstraction for both now was rejected as the specific way this schedule would die:
+provider APIs, capacity models and billing hooks bleeding into the schema before a single site is
+provisioned. One field, and a rule that nothing reads it, keeps the option open at no cost.
+
+**Consequences**
+
+- `Server` carries a provenance field from its first migration. Every other model, and the agent,
+  stays indifferent to it. A managed tier later is then a provisioner plus billing, not a migration.
+- No provider-account, capacity-pool or infrastructure-billing concepts enter the data model.
+- Provisioning into the _customer's own_ provider account via their API token is a **feature**, not
+  a change of model, and remains available later without revisiting this ADR: the customer still
+  pays the provider directly.
+- Who owns an outage on infrastructure we do not own is unresolved and needs answering before the
+  first paying customer — [Q16](OPEN_QUESTIONS.md).
+- Revisit only when paying customers ask for managed hosting by name, and treat it then as founding
+  a second company, because it is one.
+
+---
+
 ## ADR-038 — A client's route key is a short random public id, not a handle
 
 **2026-08-20** · **Status**: Accepted. Narrows [ADR-030](#adr-030--the-tenant-url-identifier-is-a-name-seeded-separately-editable-handle)

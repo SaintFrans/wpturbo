@@ -414,3 +414,23 @@ sensitive actions (`site:delete`, `client:delete`, `server:delete`, …) are add
 - **`Site`** — the hosted resource, anchored to a domain, with a required `type` column.
   Multi-process types (e.g. `docker_compose`) get child `SiteService` rows; `wordpress` and other
   single-process types have none.
+
+### Commercial constraints on `Server` and `Site`
+
+Two of the constraints above are not technical. They come from
+[BUSINESS_MODEL.md](BUSINESS_MODEL.md) and they are cheap now and painful to retrofit.
+
+- **`Server` carries a provenance field** — who owns the machine and who pays for it
+  ([ADR-039](DECISIONS.md)). Nothing may branch on its value: not `Site`, not provisioning, not the
+  agent. It exists so that a fully managed tier later is a provisioner plus billing rather than a
+  migration, and it is worthless if anything starts reading it.
+- **`Site` lifecycle states are financially load-bearing** ([ADR-041](DECISIONS.md)). Production,
+  staging, provisioning and suspended must be distinguishable in a single scoped query with no
+  interpretation, because pricing counts production sites and nothing else. Transitions between them
+  are therefore permission-gated like any destructive action, and written to the audit log — a site
+  quietly moved out of a billable state is a financial event, not a bookkeeping one.
+- **Suspension is a real state**, not delete-and-reinstall, because it is the mechanism by which a
+  site stops being billed.
+- **`Site` is not welded to one `Server`** ([ADR-040](DECISIONS.md)). Moving a site between servers
+  replaces the elasticity the infrastructure model deliberately does not have, so the foreign key
+  must be mutable and the move auditable.

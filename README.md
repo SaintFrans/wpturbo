@@ -1,6 +1,6 @@
 # Hestri
 
-A control plane for managed and semi-managed WordPress hosting.
+A control plane for WordPress hosting, for agencies that manage sites on servers they own.
 
 > **Status: early.** The account, authentication and organization layer is built and tested, and
 > so is `Client`, the first resource domain. The rest of the hosting domain — servers, sites, the
@@ -9,17 +9,24 @@ A control plane for managed and semi-managed WordPress hosting.
 
 ## What this is
 
-Hestri is the control plane through which WordPress sites are managed at scale. The
-intended model has two tiers:
+Hestri is the control plane through which WordPress sites are managed at scale. Customers
+bring their own servers; the platform enrols them, provisions sites onto them, keeps
+WordPress core, plugins and themes up to date, takes backups and monitors health. The
+hosting bill goes to the customer's own provider, on their own account.
 
-1. **Semi-managed (first target).** Customers bring their own servers. The platform
-   connects to them, keeps WordPress core, plugins and themes up to date, installs new
-   sites, and monitors health.
-2. **Fully managed (later).** The same control plane on top of infrastructure we run
-   ourselves, so the customer does not supply a server at all.
+**We sell software, never infrastructure** ([ADR-039](docs/DECISIONS.md)). That is the
+product, not the first of two tiers: a fully managed tier on our own hardware remains
+conceivable but is explicitly not a plan, and its only claim on the present is that
+`Server` will record who owns the machine while nothing downstream branches on it. Sites
+run as per-site isolated containers on ordinary cloud VPS instances, not elastic compute
+([ADR-040](docs/DECISIONS.md)).
 
-Neither tier is implemented yet. Today the application is the account and tenancy
-foundation those tiers will be built on.
+Pricing scales on the number of production sites an organization manages, in declining
+bands, with no feature ever withheld to sell an upgrade ([ADR-041](docs/DECISIONS.md)).
+See [docs/BUSINESS_MODEL.md](docs/BUSINESS_MODEL.md).
+
+None of the hosting domain is implemented yet. Today the application is the account and
+tenancy foundation it will be built on.
 
 ## Who it is for
 
@@ -38,7 +45,7 @@ with one site.
 | Transport              | NATS JetStream                                                        | **Not started** — no code, no config, no dependency |
 | Provisioning / updates | —                                                                     | **Not started**                                     |
 | Monitoring             | —                                                                     | **Not started**                                     |
-| Billing                | —                                                                     | **Not started**                                     |
+| Billing                | Per-site bands ([ADR-041](docs/DECISIONS.md))                         | **Not started** — decided, no code                  |
 
 The agent design is deliberately outbound-only: the customer's server dials out to the
 control plane, so no inbound port has to be opened on customer infrastructure. This is an
@@ -63,7 +70,7 @@ intended constraint, not an implemented one. See
 - **Invitations** — email invitations with a 3-day expiry, accept and decline flows, and a
   daily scheduled job that prunes expired invitations.
 - **Settings** — profile, security and appearance.
-- **Tooling** — Pest test suite (155 tests), Pint, Larastan, and the Vite+ toolchain (Oxlint,
+- **Tooling** — Pest test suite (157 tests), Pint, Larastan, and the Vite+ toolchain (Oxlint,
   Oxfmt) with a pre-commit hook, all wired into a GitHub Actions workflow.
 
 ### In development
@@ -72,7 +79,10 @@ Nothing. There is no partially-built hosting feature in the tree.
 
 ### Open
 
-`Server`, `Site` and the agent. One question blocks the agent and is deliberately unanswered:
+`Server`, `Site` and the agent. `Server` and `Site` now carry commercial constraints as well as
+technical ones — a provenance field on `Server`, and unambiguous lifecycle states on `Site`, because
+those states become the basis of an invoice ([ADR-039](docs/DECISIONS.md),
+[ADR-041](docs/DECISIONS.md)). One question blocks the agent and is deliberately unanswered:
 how a server proves which tenant it belongs to, how agent credentials are rotated and revoked,
 and what isolates one tenant's NATS subjects from another's. That, and everything else undecided,
 is tracked in [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md);
@@ -111,14 +121,15 @@ hook runs it over staged files.
 
 ## Documentation
 
-| Document                                         | What it covers                                                                   |
-| ------------------------------------------------ | -------------------------------------------------------------------------------- |
-| [CLAUDE.md](CLAUDE.md)                           | Project vision, architecture principles, and the working method for every change |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)     | System overview: control plane, agent, data flow, tenancy model                  |
-| [docs/DATA_MODEL.md](docs/DATA_MODEL.md)         | Core entities, their relationships, and why they are shaped that way             |
-| [docs/DECISIONS.md](docs/DECISIONS.md)           | Decision log: what was decided, when, what was rejected, and why                 |
-| [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) | Unresolved naming and design questions                                           |
-| [docs/SECURITY.md](docs/SECURITY.md)             | Threat model, security assumptions, and the security-wins rule                   |
+| Document                                         | What it covers                                                                    |
+| ------------------------------------------------ | --------------------------------------------------------------------------------- |
+| [CLAUDE.md](CLAUDE.md)                           | Project vision, architecture principles, and the working method for every change  |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)     | System overview: control plane, agent, data flow, tenancy model                   |
+| [docs/DATA_MODEL.md](docs/DATA_MODEL.md)         | Core entities, their relationships, and why they are shaped that way              |
+| [docs/BUSINESS_MODEL.md](docs/BUSINESS_MODEL.md) | What we sell, to whom, and how it is priced — and what that obliges in the schema |
+| [docs/DECISIONS.md](docs/DECISIONS.md)           | Decision log: what was decided, when, what was rejected, and why                  |
+| [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) | Unresolved naming and design questions                                            |
+| [docs/SECURITY.md](docs/SECURITY.md)             | Threat model, security assumptions, and the security-wins rule                    |
 
 **These documents are part of the definition of done.** A change is not finished until the
 documentation that describes it is correct again. Stale architecture documentation is worse

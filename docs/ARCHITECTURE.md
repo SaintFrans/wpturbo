@@ -29,6 +29,13 @@ it is outstanding.
 
 Only the top box exists, and only its left half.
 
+**The servers are the customer's** ([ADR-039](DECISIONS.md)). Hestri manages infrastructure it does
+not own and never bills for; sites run as per-site isolated containers on ordinary cloud VPS
+instances rather than on elastic compute ([ADR-040](DECISIONS.md)). Both constraints shape the agent
+design more than any technical preference does: the only thing a stranger can be asked to supply is
+a Linux box with root, which is exactly what an outbound-only agent needs and what an orchestrator
+would not accept. See [BUSINESS_MODEL.md](BUSINESS_MODEL.md).
+
 ## 2. Control plane (BUILT)
 
 A monolithic Laravel application serving a React SPA through Inertia. There is no separate
@@ -359,3 +366,11 @@ change" rule in `CLAUDE.md` have actual history to attach to.
    `lazyPlugins(() => [...])` callback.
 7. **Do not reintroduce `baseUrl` in `tsconfig.json`.** It would disable type-aware
    linting, and it is removed in TypeScript 7.
+8. **We manage infrastructure we do not own** ([ADR-039](DECISIONS.md)). No provider-account,
+   capacity-pool or infrastructure-billing concept belongs in the data model, and `Server`'s
+   provenance field must stay unread by everything downstream.
+9. **Density obliges per-site isolation** ([ADR-040](DECISIONS.md)). Many sites share one box, so
+   each needs its own unix user, PHP-FPM pool and database user, with no cross-readable webroots.
+   Under [SECURITY.md](SECURITY.md) §0 this is not tradeable for convenience.
+10. **A site's lifecycle state is an invoice line** ([ADR-041](DECISIONS.md)). Anything that changes
+    it is permission-gated and audited.

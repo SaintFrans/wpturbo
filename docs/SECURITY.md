@@ -327,6 +327,15 @@ Non-negotiable, and applied whether or not the task mentions security.
    particular risk". The value is in having looked.
 10. **Test the negative case.** A feature is not covered because the happy path passes. The
     test that matters is the one proving another tenant gets a 403.
+11. **Isolate sites from each other on a shared server** ([ADR-040](DECISIONS.md)). Density is the
+    product's economic advantage and it is also its largest blast radius: twenty-five sites on one
+    box means one compromised WordPress install sits beside twenty-four others. Each site gets its
+    own unix user, its own PHP-FPM pool and its own database user, with no cross-readable webroots.
+    A shortcut here trades one customer's clients against another's, which rule §0 forbids outright.
+12. **Treat a site's lifecycle state as financial data** ([ADR-041](DECISIONS.md)). Pricing counts
+    production sites, so moving a site out of a billable state has a motive attached. Every
+    transition is permission-gated and written to the audit log, and none of them may be a side
+    effect of something else.
 
 ## 6. When to stop and ask
 
@@ -338,5 +347,12 @@ Do not decide these alone:
 - Anything touching agent identity, enrolment, credentials or the message bus — all of
   [Q2](OPEN_QUESTIONS.md).
 - Any relaxation of an existing control, however small it looks.
+- Anything that would give a non-member a login — the agency's own client, most obviously.
+  [ADR-017](DECISIONS.md) gave `Client` no login deliberately, and a client-facing principal sits
+  outside the membership model entirely. That is [Q15](OPEN_QUESTIONS.md), and it is a
+  tenant-isolation question, not a UX one.
+- Anything that would make us the custodian of customer site data rather than a manager of it —
+  storing backups on our own infrastructure, for instance. That is [Q14](OPEN_QUESTIONS.md), and it
+  would widen the threat model in §1 substantially.
 
 State the options and a recommendation. Do not proceed on an assumption to save time.

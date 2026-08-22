@@ -219,11 +219,18 @@ Use Wayfinder to generate TypeScript functions for Laravel routes. Import from `
 
 ## What we are building
 
-A control plane for managed and semi-managed WordPress hosting, for **agencies** that manage
-sites on behalf of their own clients. Two tiers are intended: customers bring their own
-servers that the platform manages (first), and a fully managed tier on our own
-infrastructure (later). Management happens through a Go agent on each server that connects
-outbound over NATS JetStream.
+A control plane for WordPress hosting, for **agencies** that manage sites on behalf of their
+own clients. Customers bring their own servers; we sell the software that manages them and
+**never** the infrastructure itself (ADR-039). A fully managed tier on our own hardware is
+conceivable but is explicitly not a plan — its only claim on the present is one provenance
+field on `Server` that nothing downstream may read. Sites run as per-site isolated
+containers on ordinary cloud VPS instances, not elastic compute (ADR-040). Management
+happens through a Go agent on each server that connects outbound over NATS JetStream.
+
+Pricing scales on production sites in declining bands, with no capability ever gated by
+volume (ADR-041). That has two consequences you will meet in the models: `Site` lifecycle
+states are invoice lines, so they must be unambiguous, permission-gated and audited; and
+`Site` is never welded to one `Server`. See [docs/BUSINESS_MODEL.md](docs/BUSINESS_MODEL.md).
 
 **Almost none of that exists yet.** What is built is the account, authentication and organization
 layer, plus `Client` — the first resource domain, and the one that hosts nothing. There is no
@@ -243,6 +250,9 @@ hosting-domain code exists — verify before referencing it. See [README.md](REA
 4. **The tenant is in the URL.** Tenant-scoped routes carry the team slug as their first
    path segment, guarded by `EnsureTeamMembership` (ADR-007).
 5. **Security wins over functionality.** Always — see the rule below.
+6. **Density obliges isolation.** Many sites share one customer box, so each gets its own
+   unix user, PHP-FPM pool and database user. The economics depend on density; the promise
+   depends on the isolation (ADR-040).
 
 ## Where the documentation lives
 
@@ -251,6 +261,7 @@ hosting-domain code exists — verify before referencing it. See [README.md](REA
 | [README.md](README.md)                           | You need the overview and current status                                    |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)     | Touching structure, routing, tenancy or the frontend/backend seam           |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md)         | Touching models, migrations or DTOs                                         |
+| [docs/BUSINESS_MODEL.md](docs/BUSINESS_MODEL.md) | Touching `Server`, `Site`, pricing, or anything that could become billable  |
 | [docs/DECISIONS.md](docs/DECISIONS.md)           | Before changing something that looks arbitrary — it probably is not         |
 | [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) | **Always check.** If your task touches an open question, stop and ask       |
 | [docs/MVP_PLAN.md](docs/MVP_PLAN.md)             | You need the order of what remains before the Go agent                      |
@@ -347,7 +358,7 @@ Four more decisions are accepted and equally unimplemented:
 
 **This is implemented.** The rename and the handle change landed on 2026-08-17 (all six phases,
 recorded in [ADR-025](docs/DECISIONS.md) through [ADR-031](docs/DECISIONS.md)); `composer
-ci:check` is green on 155 tests. **Nothing from ADR-025 through ADR-031 is left unimplemented.**
+ci:check` is green on 157 tests. **Nothing from ADR-025 through ADR-031 is left unimplemented.**
 
 - **Admins manage members ranking below their own role** ([ADR-028](docs/DECISIONS.md)) — Members
   only, never another Admin or the Owner, and never inviting above Member. The bound is on the

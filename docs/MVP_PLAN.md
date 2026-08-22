@@ -106,6 +106,26 @@ The entities themselves are already designed: [ADR-017](DECISIONS.md) for `Clien
 [ADR-018](DECISIONS.md) for `Site` and `SiteService`, [ADR-019](DECISIONS.md) for ownership and
 deletion, [ADR-030](DECISIONS.md) for route keys via the `GeneratesHandle` trait.
 
+**Three commercial constraints were added on 2026-08-22** and they land entirely on these two
+models. They change what `Server` and `Site` must carry, not where they sit in this order. See
+[BUSINESS_MODEL.md](BUSINESS_MODEL.md); the decisions are
+[ADR-039](DECISIONS.md), [ADR-040](DECISIONS.md) and [ADR-041](DECISIONS.md).
+
+| Constraint                                                          | What it means for the migration                                                                                                                                                                                          |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Server` records provenance ([ADR-039](DECISIONS.md))               | One column recording who owns and pays for the machine, and a rule that nothing downstream reads it. It keeps a managed tier possible later at no cost now — and it is worthless the moment something branches on it.    |
+| `Site` lifecycle states are invoice lines ([ADR-041](DECISIONS.md)) | Production, staging, provisioning and suspended must be distinguishable in one scoped query, with no interpretation. Pricing counts production sites and nothing else. Every transition is permission-gated and audited. |
+| `Site` is not welded to a `Server` ([ADR-040](DECISIONS.md))        | The foreign key is mutable and the move is auditable. Moving a site between servers is what replaces the elasticity the infrastructure model deliberately lacks.                                                         |
+
+A real **suspend** action follows from the second of those: suspension is how a site stops being
+billable, so delete-and-reinstall is not an acceptable substitute.
+
+**Explicitly not in this step, or anywhere near it:** metering, plans, subscriptions, invoicing,
+spend caps, payment integration. The definitions have to exist in the schema now because
+retrofitting a billable unit means retrofitting it against a customer. The billing that reads them
+does not exist and will not until there is something to bill for. Building it earlier is the
+fastest way to ship neither a control plane nor a billing product.
+
 ### 4 — Answer [Q2](OPEN_QUESTIONS.md)
 
 Six questions, each a security decision needing its own ADR and an entry in
@@ -116,6 +136,17 @@ isolation boundary of the whole system.
 ### 5 — The Go agent
 
 Out of scope for this repository, and the reason for everything above it.
+
+### 3b — Server headroom and site placement
+
+Follows `Server` and `Site` immediately, and belongs on the path rather than beside it. On
+infrastructure we do not own, per-server headroom with per-site attribution is both the thing that
+replaces elasticity ([ADR-040](DECISIONS.md)) and the only honest answer to "why is this site slow
+and whose fault is it". Vertical resize through a provider API and moving a site between servers are
+the two actions it makes possible.
+
+It sits after `Site` because it needs both models, and before the agent because it defines what the
+agent has to report.
 
 ## Deliberately not in the path
 
@@ -131,3 +162,7 @@ Out of scope for this repository, and the reason for everything above it.
 - **A paying customer before the agent exists** moves G3 up immediately: an organization with no
   guaranteed owner and no transfer path is a support problem the moment someone else's money is
   involved.
+- **A paying customer also forces [Q16](OPEN_QUESTIONS.md)** — who owns an outage on a server we do
+  not own. Not a code question, but two of its answers have product consequences: detecting a
+  vanished server rather than failing silently, and backing up before mutation as a hard rule rather
+  than a feature.
