@@ -2,11 +2,11 @@
 
 _Last verified against the codebase: 2026-08-18._
 
-Everything decided up to and including [ADR-034](DECISIONS.md) is implemented, plus
-[ADR-023](DECISIONS.md), [ADR-032](DECISIONS.md) and [ADR-033](DECISIONS.md) (closing G2, G5 and
-G6). What remains: the retention purge tasks [ADR-036](DECISIONS.md) requires — 30 days for
+Everything decided up to and including [ADR-034](adr/0034-deleting-an-organization-soft-deletes-its-whole-tree.md) is implemented, plus
+[ADR-023](adr/0023-invitation-emails-are-rate-limited-and-queued.md), [ADR-032](adr/0032-an-append-only-audit-log-built-now-while-there-are.md) and [ADR-033](adr/0033-invitation-codes-are-stored-hashed.md) (closing G2, G5 and
+G6). What remains: the retention purge tasks [ADR-036](adr/0036-retention-30-days-for-deleted-organizations-24-months.md) requires — 30 days for
 deleted organizations, 24 months for audit entries — neither of which exists yet; **G3**,
-ownership transfer ([ADR-020](DECISIONS.md), [ADR-029](DECISIONS.md)), deliberately deferred — see
+ownership transfer ([ADR-020](adr/0020-ownership-can-be-transferred-the-database-enforces.md), [ADR-029](adr/0029-recovering-an-abandoned-organization-is-a-manual.md)), deliberately deferred — see
 [MVP_PLAN.md](MVP_PLAN.md); and **G1**, the agent, which has no decision yet
 ([Q2](OPEN_QUESTIONS.md)).
 
@@ -26,7 +26,7 @@ Concretely:
   **stated explicitly** in the change, never absorbed silently. The person asking for the
   feature is entitled to know what shape it ended up in and why.
 - Every trade-off with a non-trivial security implication is recorded here and in
-  [DECISIONS.md](DECISIONS.md).
+  [docs/adr/](adr/).
 
 The reason is specific to this product, not generic caution: the platform holds
 administrative access to servers running its customers' customers' websites. A tenant
@@ -78,12 +78,12 @@ someone qualified to answer it. Do not treat this section as a compliance positi
 
 What that uncertainty does **not** change:
 
-- **The retention periods in [ADR-036](DECISIONS.md) stand.** Twenty-four months for audit
+- **The retention periods in [ADR-036](adr/0036-retention-30-days-for-deleted-organizations-24-months.md) stand.** Twenty-four months for audit
   entries is defensible on its own — an incident is often found late, and a log that has already
   been pruned is worth nothing. It was chosen with NIS2 in mind and does not depend on it.
-- **The audit log is built** ([ADR-032](DECISIONS.md)), for the reason that entry already gives:
+- **The audit log is built** ([ADR-032](adr/0032-an-append-only-audit-log-built-now-while-there-are.md)), for the reason that entry already gives:
   a handful of call sites today, dozens once servers exist. Its retention purge
-  ([ADR-036](DECISIONS.md)) is not — the scheduled task does not exist yet.
+  ([ADR-036](adr/0036-retention-30-days-for-deleted-organizations-24-months.md)) is not — the scheduled task does not exist yet.
 
 What is parked until the scoping question is answered: registration with the NCSC, an incident
 response process, supply-chain requirements, and the non-delegable board responsibility. None of
@@ -118,7 +118,7 @@ These are believed true and are relied upon. If one becomes false, the model bre
 `EnsureOrganizationMembership` resolves the organization from the single `organization` route
 parameter and aborts 403 unless the authenticated user has a membership row for it. It optionally
 enforces a minimum role. Every tenant route — resources and administration alike — sits inside its
-group, behind the literal `org/` segment ([ADR-031](DECISIONS.md)).
+group, behind the literal `org/` segment ([ADR-031](adr/0031-tenant-routes-sit-behind-a-literal-org-segment.md)).
 
 **That 403 covers three cases and they are deliberately indistinguishable**: no user, no such
 organization, and not a member. A readable handle therefore reveals nothing about who is a
@@ -164,7 +164,7 @@ similar against a live database.
 
 ### Privilege boundaries
 
-- **An actor may only affect roles ranking strictly below their own** ([ADR-028](DECISIONS.md)).
+- **An actor may only affect roles ranking strictly below their own** ([ADR-028](adr/0028-admins-manage-members-below-their-own-role.md)).
   One comparison — `OrganizationRole::outranks()` — blocks self-promotion, removing the Owner and
   minting a peer Admin, without a special case for each. In practice: an Admin manages Members and
   nothing else; the Owner manages Admins and Members.
@@ -172,7 +172,7 @@ similar against a live database.
   current role and the role they would gain; `inviteMember` checks the invited role. Checking only
   "may this user invite?" is what left the hole described below.
 - Owner is excluded everywhere because a role does not outrank itself — not even the Owner can
-  hand out Owner. [ADR-020](DECISIONS.md)'s transfer flow remains the only route to ownership,
+  hand out Owner. [ADR-020](adr/0020-ownership-can-be-transferred-the-database-enforces.md)'s transfer flow remains the only route to ownership,
   now by construction rather than by exception.
 - Form requests restrict the submitted role to what the actor may assign, and their `authorize()`
   checks the base permission first, so someone with no business here gets a 403 rather than a
@@ -181,14 +181,14 @@ similar against a live database.
   (`OrganizationPolicy::leave`).
 - **A user cannot leave or delete their last organization**, so everyone always retains a tenant.
   Where that is not enforceable — an owner removes someone, or deletes the organization under
-  them — `EnsureUserHasOrganization` creates a replacement they own ([ADR-025](DECISIONS.md)). It
+  them — `EnsureUserHasOrganization` creates a replacement they own ([ADR-025](adr/0025-team-becomes-organization-the-personal-team-is-removed.md)). It
   never grants access to anything that already existed.
   Note that `OrganizationPolicy::leave` guards **two** unrelated things: the last-organization rule
   and the sole owner. Both must hold.
 - Deleting an organization requires typing its exact name (`DeleteOrganizationRequest`) — a
   confirmation control against destructive mis-clicks, not an authorisation control.
 
-### Recovering an abandoned organization ([ADR-029](DECISIONS.md))
+### Recovering an abandoned organization ([ADR-029](adr/0029-recovering-an-abandoned-organization-is-a-manual.md))
 
 There is deliberately **no self-service takeover**. An organization whose Owner has disappeared
 — left the company, unreachable, died — is recovered by an operator, following this procedure
@@ -212,19 +212,19 @@ still applies, and an ownership change is precisely the event an audit log shoul
 
 ### Invitations
 
-64-character random code, stored as a SHA-256 digest rather than plaintext ([ADR-033](DECISIONS.md));
+64-character random code, stored as a SHA-256 digest rather than plaintext ([ADR-033](adr/0033-invitation-codes-are-stored-hashed.md));
 email must match the authenticated user's, case-insensitively; 3-day expiry; daily prune of
 expired rows; duplicate invitations and invitations to existing members are rejected
 (`UniqueOrganizationInvitation`); cancelling an invitation verifies it belongs to the organization
 in the URL before the policy check; creating one is rate-limited to 5/min per inviting user
-([ADR-023](DECISIONS.md)).
+([ADR-023](adr/0023-invitation-emails-are-rate-limited-and-queued.md)).
 
 **The code is not a general route key.** It is resolved by hand — hashing the incoming value and
 looking up `code_hash` — only where it is genuinely acting as a secret: the link emailed to the
 invitee (`FortifyServiceProvider::organizationInvitation()`). Every other invitation route
 (`invitations.accept`, `invitations.decline`, `organizations.invitations.destroy`) binds by `id`.
 This is deliberate, not a shortcut: `ValidOrganizationInvitation`'s email-match check
-([ADR-009](DECISIONS.md)) is what actually authorises accept and decline, so binding those by `id`
+([ADR-009](adr/0009-the-invitation-code-alone-does-not-grant-access.md)) is what actually authorises accept and decline, so binding those by `id`
 grants a guesser nothing — they still cannot act on an invitation addressed to someone else's
 mailbox. Reserve `code_hash` lookups for contexts where the recipient is not yet authenticated at
 all, matching the shape ADR-033 lays out for any future invite-style token.
@@ -234,7 +234,7 @@ the `org/` prefix, because the recipient is not a member yet.
 
 ### Audit log
 
-An append-only `audit_log_entries` table ([ADR-032](DECISIONS.md)) records who did what, to whom,
+An append-only `audit_log_entries` table ([ADR-032](adr/0032-an-append-only-audit-log-built-now-while-there-are.md)) records who did what, to whom,
 in which organization, when and from where. Written for eight events today: an invitation
 created, cancelled, accepted or declined; a member's role changed, a member removed, a member
 leaving voluntarily; and an organization deleted. Owners and Admins read their own organization's
@@ -248,7 +248,7 @@ them out would have meant every self-initiated departure went unrecorded while e
 Admin-initiated one did not. Added during implementation; recorded in ADR-032.
 
 **`organization_id` and `target_id` carry no foreign key.** Entries must survive the organization's
-eventual hard purge ([ADR-036](DECISIONS.md)), and the target (an invitation, a membership) is
+eventual hard purge ([ADR-036](adr/0036-retention-30-days-for-deleted-organizations-24-months.md)), and the target (an invitation, a membership) is
 routinely already force-deleted by the very action being recorded — cancelling an invitation
 deletes it in the same request that writes the entry describing it. A `target_label` snapshot is
 taken at write time instead, since the target itself is usually gone by the time anyone reads this.
@@ -261,26 +261,26 @@ triggers) is a deployment concern, out of scope here.
 (`actor_id` is `nullOnDelete`, not cascading) — deleting your account must not erase the record of
 what you did while you had one. Every renderer handles a null actor as "System".
 
-**Retention is not yet built.** [ADR-036](DECISIONS.md) sets 24 months for audit entries and 30
+**Retention is not yet built.** [ADR-036](adr/0036-retention-30-days-for-deleted-organizations-24-months.md) sets 24 months for audit entries and 30
 days for soft-deleted organizations; the scheduled purge tasks for both remain to be written.
 
 ## 4. Known gaps
 
 Recorded honestly. None is currently being exploited; all are real.
 
-| #   | Gap                                                                                        | Impact                                                                                                                                                                                                                                                                          | Tracked                                          |
-| --- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| G1  | The entire agent, transport and server-credential model is undesigned                      | The highest-consequence part of the platform has no security design at all                                                                                                                                                                                                      | [Q2](OPEN_QUESTIONS.md)                          |
-| G2  | ~~No rate limit on invitation creation; email sent synchronously~~                         | **Closed 2026-08-18.** The notification already implemented `ShouldQueue`; what was missing was the rate limiter, now 5/min per inviting user                                                                                                                                   | [ADR-023](DECISIONS.md), [ADR-035](DECISIONS.md) |
-| G3  | Nothing guarantees exactly one Owner per organization, and ownership cannot be transferred | An abandoned organization has no recovery path; ownerless organizations are representable                                                                                                                                                                                       | [ADR-020](DECISIONS.md), [ADR-029](DECISIONS.md) |
-| G4  | ~~Organization soft-delete hard-deletes memberships~~                                      | **Closed 2026-08-18.** Memberships and invitations soft-delete with the organization, so a restore is a coherent whole. Individual removals stay hard deletes                                                                                                                   | [ADR-019](DECISIONS.md), [ADR-034](DECISIONS.md) |
-| G5  | ~~No audit log~~                                                                           | **Closed 2026-08-18.** Membership and invitation events are recorded; retention purge (ADR-036) is a separate, still-open task                                                                                                                                                  | [ADR-032](DECISIONS.md)                          |
-| G6  | ~~Invitation codes are stored in plaintext~~                                               | **Closed 2026-08-18.** `code_hash` holds a SHA-256 digest; the plaintext exists only in the emailed link and is never persisted                                                                                                                                                 | [ADR-033](DECISIONS.md)                          |
-| G8  | ~~Production password policy is environment-conditional~~                                  | **Closed 2026-08-18.** The condition is inverted: strict everywhere except in tests, so a misconfigured environment makes development stricter rather than production weaker                                                                                                    | —                                                |
-| G9  | ~~Only the Owner can revoke a member's access~~                                            | **Closed 2026-08-18.** Admins can remove and re-role members ranking below them, so revocation no longer has a bus factor of one                                                                                                                                                | [ADR-028](DECISIONS.md)                          |
-| G10 | ~~The organization's name is in every URL~~                                                | **Withdrawn 2026-08-17 — this was never a real gap.** `EnsureOrganizationMembership` returns one indistinguishable 403 for "no such organization" and "not a member", so a readable handle enables no enumeration                                                               | [ADR-030](DECISIONS.md)                          |
-| G11 | ~~Any Admin could invite a new Owner~~                                                     | **Closed 2026-08-18.** `CreateOrganizationInvitationRequest` validated the role with `Rule::enum`, accepting `owner`, while `inviteMember` only checked whether the actor could invite at all. A live escalation path that predated ADR-028 and was found while implementing it | [ADR-028](DECISIONS.md)                          |
-| G12 | Nothing detects that an incident has happened                                              | No alerting, no anomaly detection, no monitoring of failed logins or unusual membership changes. The audit log records what happened; it does not tell anyone that it did. Deliberately not a priority before the MVP                                                           | —                                                |
+| #   | Gap                                                                                        | Impact                                                                                                                                                                                                                                                                          | Tracked                                                                                                                                                |
+| --- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| G1  | The entire agent, transport and server-credential model is undesigned                      | The highest-consequence part of the platform has no security design at all                                                                                                                                                                                                      | [Q2](OPEN_QUESTIONS.md)                                                                                                                                |
+| G2  | ~~No rate limit on invitation creation; email sent synchronously~~                         | **Closed 2026-08-18.** The notification already implemented `ShouldQueue`; what was missing was the rate limiter, now 5/min per inviting user                                                                                                                                   | [ADR-023](adr/0023-invitation-emails-are-rate-limited-and-queued.md), [ADR-035](adr/0035-laravel-cloud-is-the-deployment-target.md)                    |
+| G3  | Nothing guarantees exactly one Owner per organization, and ownership cannot be transferred | An abandoned organization has no recovery path; ownerless organizations are representable                                                                                                                                                                                       | [ADR-020](adr/0020-ownership-can-be-transferred-the-database-enforces.md), [ADR-029](adr/0029-recovering-an-abandoned-organization-is-a-manual.md)     |
+| G4  | ~~Organization soft-delete hard-deletes memberships~~                                      | **Closed 2026-08-18.** Memberships and invitations soft-delete with the organization, so a restore is a coherent whole. Individual removals stay hard deletes                                                                                                                   | [ADR-019](adr/0019-resources-belong-directly-to-their-team-cross-team.md), [ADR-034](adr/0034-deleting-an-organization-soft-deletes-its-whole-tree.md) |
+| G5  | ~~No audit log~~                                                                           | **Closed 2026-08-18.** Membership and invitation events are recorded; retention purge (ADR-036) is a separate, still-open task                                                                                                                                                  | [ADR-032](adr/0032-an-append-only-audit-log-built-now-while-there-are.md)                                                                              |
+| G6  | ~~Invitation codes are stored in plaintext~~                                               | **Closed 2026-08-18.** `code_hash` holds a SHA-256 digest; the plaintext exists only in the emailed link and is never persisted                                                                                                                                                 | [ADR-033](adr/0033-invitation-codes-are-stored-hashed.md)                                                                                              |
+| G8  | ~~Production password policy is environment-conditional~~                                  | **Closed 2026-08-18.** The condition is inverted: strict everywhere except in tests, so a misconfigured environment makes development stricter rather than production weaker                                                                                                    | —                                                                                                                                                      |
+| G9  | ~~Only the Owner can revoke a member's access~~                                            | **Closed 2026-08-18.** Admins can remove and re-role members ranking below them, so revocation no longer has a bus factor of one                                                                                                                                                | [ADR-028](adr/0028-admins-manage-members-below-their-own-role.md)                                                                                      |
+| G10 | ~~The organization's name is in every URL~~                                                | **Withdrawn 2026-08-17 — this was never a real gap.** `EnsureOrganizationMembership` returns one indistinguishable 403 for "no such organization" and "not a member", so a readable handle enables no enumeration                                                               | [ADR-030](adr/0030-the-tenant-url-identifier-is-a-name-seeded-separately.md)                                                                           |
+| G11 | ~~Any Admin could invite a new Owner~~                                                     | **Closed 2026-08-18.** `CreateOrganizationInvitationRequest` validated the role with `Rule::enum`, accepting `owner`, while `inviteMember` only checked whether the actor could invite at all. A live escalation path that predated ADR-028 and was found while implementing it | [ADR-028](adr/0028-admins-manage-members-below-their-own-role.md)                                                                                      |
+| G12 | Nothing detects that an incident has happened                                              | No alerting, no anomaly detection, no monitoring of failed logins or unusual membership changes. The audit log records what happened; it does not tell anyone that it did. Deliberately not a priority before the MVP                                                           | —                                                                                                                                                      |
 
 **G1 is the only one still without a decision**, and it is a design programme rather than a fix —
 see [Q2](OPEN_QUESTIONS.md). Everything else has an ADR; what remains to build is sequenced in
@@ -315,9 +315,9 @@ Non-negotiable, and applied whether or not the task mentions security.
    encrypted in the database, and never logged.
 7. **Non-sequential route keys for tenant resources**, for the same enumeration reasons the
    organization handle is a handle and not an ID. There are exactly two schemes, and the choice
-   between them is settled: `GeneratesHandle` ([ADR-030](DECISIONS.md)) for anything occupying the
+   between them is settled: `GeneratesHandle` ([ADR-030](adr/0030-the-tenant-url-identifier-is-a-name-seeded-separately.md)) for anything occupying the
    tenant segment of the URL, where the value is read, shared and typed by people;
-   `GeneratesPublicId` ([ADR-038](DECISIONS.md)) — five random characters, no history table — for
+   `GeneratesPublicId` ([ADR-038](adr/0038-a-clients-route-key-is-a-short-random-public-id-not-a.md)) — five random characters, no history table — for
    resources addressed _inside_ `/org/{organization}/`, where a reissued key can only ever resolve
    to another record of the same tenant. Inventing a third scheme needs an ADR. Neither key is
    ever an authorisation factor: reads still go through the organization relationship.
@@ -327,12 +327,12 @@ Non-negotiable, and applied whether or not the task mentions security.
    particular risk". The value is in having looked.
 10. **Test the negative case.** A feature is not covered because the happy path passes. The
     test that matters is the one proving another tenant gets a 403.
-11. **Isolate sites from each other on a shared server** ([ADR-040](DECISIONS.md)). Density is the
+11. **Isolate sites from each other on a shared server** ([ADR-040](adr/0040-sites-are-containers-on-customer-vps-instances-not.md)). Density is the
     product's economic advantage and it is also its largest blast radius: twenty-five sites on one
     box means one compromised WordPress install sits beside twenty-four others. Each site gets its
     own unix user, its own PHP-FPM pool and its own database user, with no cross-readable webroots.
     A shortcut here trades one customer's clients against another's, which rule §0 forbids outright.
-12. **Treat a site's lifecycle state as financial data** ([ADR-041](DECISIONS.md)). Pricing counts
+12. **Treat a site's lifecycle state as financial data** ([ADR-041](adr/0041-pricing-scales-on-billable-sites-capabilities-are.md)). Pricing counts
     production sites, so moving a site out of a billable state has a motive attached. Every
     transition is permission-gated and written to the audit log, and none of them may be a side
     effect of something else.
@@ -348,7 +348,7 @@ Do not decide these alone:
   [Q2](OPEN_QUESTIONS.md).
 - Any relaxation of an existing control, however small it looks.
 - Anything that would give a non-member a login — the agency's own client, most obviously.
-  [ADR-017](DECISIONS.md) gave `Client` no login deliberately, and a client-facing principal sits
+  [ADR-017](adr/0017-clients-are-a-grouping-entity-inside-a-team-not-a.md) gave `Client` no login deliberately, and a client-facing principal sits
   outside the membership model entirely. That is [Q15](OPEN_QUESTIONS.md), and it is a
   tenant-isolation question, not a UX one.
 - Anything that would make us the custodian of customer site data rather than a manager of it —

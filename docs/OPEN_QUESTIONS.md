@@ -6,7 +6,7 @@ by accident while building something adjacent.
 
 **If a task touches one of these, stop and ask rather than assuming.** That rule is in
 `CLAUDE.md`. When a question is answered, move it to
-[DECISIONS.md](DECISIONS.md) as an ADR and delete it here.
+[docs/adr/](adr/) as an ADR and delete it here.
 
 _Last reviewed: 2026-08-22._
 
@@ -50,12 +50,12 @@ builds on is actually finished, not sketched alongside it.
 
 **Status:** Open. Blocks nothing yet; must be answered before backups are built.
 
-[ADR-041](DECISIONS.md) allows exactly one kind of second charge — a consumption meter for
+[ADR-041](adr/0041-pricing-scales-on-billable-sites-capabilities-are.md) allows exactly one kind of second charge — a consumption meter for
 something that costs us money per unit — and backup storage is the only candidate. Whether it
 exists at all depends on where backups are written:
 
 1. **To the customer's own object storage** (their S3, B2, Storage Box). Consistent with
-   [ADR-039](DECISIONS.md) and with the rule that we never bill for what the customer already
+   [ADR-039](adr/0039-hestri-sells-a-control-plane-never-infrastructure.md) and with the rule that we never bill for what the customer already
    bought. There is then **no second meter at all** and pricing stays purely per-site. It also
    means a restore depends on credentials and a bucket we do not control.
 2. **To storage we run**, as a convenience, metered honestly per GB beyond an included allowance.
@@ -74,10 +74,10 @@ The answer decides whether the pricing page has one line or two, and whether
 ## Q15 — Is there a client-facing principal, and what can it see?
 
 **Status:** Open. Blocks the "every account gets every capability" claim in
-[ADR-041](DECISIONS.md).
+[ADR-041](adr/0041-pricing-scales-on-billable-sites-capabilities-are.md).
 
-[ADR-017](DECISIONS.md) deliberately gave `Client` no membership and no login: it is a grouping
-entity, not a tenancy level. [ADR-037](DECISIONS.md) then settled that every _member_ sees
+[ADR-017](adr/0017-clients-are-a-grouping-entity-inside-a-team-not-a.md) deliberately gave `Client` no membership and no login: it is a grouping
+entity, not a tenancy level. [ADR-037](adr/0037-every-member-sees-everything-in-their-organization.md) then settled that every _member_ sees
 everything in the organization. Neither addresses a person who is not a member at all — the
 agency's own client, wanting to see their own site's uptime, or approve an update.
 
@@ -88,7 +88,7 @@ squarely a tenant-isolation question, so it needs its own ADR and an entry in
 [SECURITY.md](SECURITY.md) before any implementation.
 
 Until it is answered, **client-facing access is not part of the offer** and must not be described
-as one, even though [ADR-041](DECISIONS.md) gates no capabilities by volume.
+as one, even though [ADR-041](adr/0041-pricing-scales-on-billable-sites-capabilities-are.md) gates no capabilities by volume.
 
 **Relevant when:** client access, client portals, approval flows, or a second guard is proposed.
 
@@ -98,7 +98,7 @@ as one, even though [ADR-041](DECISIONS.md) gates no capabilities by volume.
 
 **Status:** Open. Not a code question. Must be answered before the first paying customer.
 
-[ADR-039](DECISIONS.md) makes the customer's provider account, payment method and server the
+[ADR-039](adr/0039-hestri-sells-a-control-plane-never-infrastructure.md) makes the customer's provider account, payment method and server the
 customer's own, while provisioning, the agent and the control plane are ours. That boundary is
 clear technically and completely unwritten commercially:
 

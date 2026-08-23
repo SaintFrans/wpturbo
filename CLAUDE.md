@@ -259,10 +259,11 @@ hosting-domain code exists — verify before referencing it. See [README.md](REA
 | Document                                         | Read it when                                                                |
 | ------------------------------------------------ | --------------------------------------------------------------------------- |
 | [README.md](README.md)                           | You need the overview and current status                                    |
+| [CONTEXT.md](CONTEXT.md)                         | **First.** The glossary — which word this project uses, and which are dead  |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)     | Touching structure, routing, tenancy or the frontend/backend seam           |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md)         | Touching models, migrations or DTOs                                         |
 | [docs/BUSINESS_MODEL.md](docs/BUSINESS_MODEL.md) | Touching `Server`, `Site`, pricing, or anything that could become billable  |
-| [docs/DECISIONS.md](docs/DECISIONS.md)           | Before changing something that looks arbitrary — it probably is not         |
+| [docs/adr/](docs/adr/)                           | Before changing something that looks arbitrary — it probably is not         |
 | [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) | **Always check.** If your task touches an open question, stop and ask       |
 | [docs/MVP_PLAN.md](docs/MVP_PLAN.md)             | You need the order of what remains before the Go agent                      |
 | [docs/SECURITY.md](docs/SECURITY.md)             | Every task. The rules in §5 apply whether or not the task mentions security |
@@ -299,7 +300,7 @@ This is a hard rule, not a preference. Full reasoning in [docs/SECURITY.md](docs
 - When the safer approach makes a feature slower, narrower or less convenient, **say so
   explicitly**. Never absorb that silently.
 - Record any trade-off with a non-trivial security implication in
-  [docs/SECURITY.md](docs/SECURITY.md) and [docs/DECISIONS.md](docs/DECISIONS.md).
+  [docs/SECURITY.md](docs/SECURITY.md) and [docs/adr/](docs/adr/).
 
 ## When to ask instead of deciding
 
@@ -318,8 +319,8 @@ When in doubt, ask. Do not proceed on an assumption to save time.
 
 ## Organizations, Clients, and Sites — settled
 
-Decided, see [ADR-025](docs/DECISIONS.md), [ADR-017](docs/DECISIONS.md) and
-[ADR-018](docs/DECISIONS.md):
+Decided, see [ADR-025](docs/adr/0025-team-becomes-organization-the-personal-team-is-removed.md), [ADR-017](docs/adr/0017-clients-are-a-grouping-entity-inside-a-team-not-a.md) and
+[ADR-018](docs/adr/0018-the-hosted-resource-is-called-site-with-a-type-and.md):
 
 - **The tenancy boundary is `Organization`.** It is being renamed from `Team` — same single
   boundary, no second tenancy level, no layer inside it. A user may belong to several
@@ -340,27 +341,27 @@ Decided, see [ADR-025](docs/DECISIONS.md), [ADR-017](docs/DECISIONS.md) and
 
 Four more decisions are accepted and equally unimplemented:
 
-- **Tenant routes are `/org/{organization}/…`** ([ADR-031](docs/DECISIONS.md)). The literal
+- **Tenant routes are `/org/{organization}/…`** ([ADR-031](docs/adr/0031-tenant-routes-sit-behind-a-literal-org-segment.md)). The literal
   `org/` segment keeps the handle namespace free, so no reserved-word list is needed and
   `/settings/…` is exclusively personal. There is one route parameter: `{organization}`.
-- **The URL identifier is a `handle`** ([ADR-030](docs/DECISIONS.md)), seeded from the name once
+- **The URL identifier is a `handle`** ([ADR-030](docs/adr/0030-the-tenant-url-identifier-is-a-name-seeded-separately.md)), seeded from the name once
   at creation and then independent of it. Renaming never changes a URL; changing the handle is a
   separate, explicit action that does break existing links. A handle is never reissued —
   uniqueness spans the live column, soft-deleted rows and `organization_handles`. `GeneratesHandle`
   is for the tenant segment only: resources addressed _inside_ it take `GeneratesPublicId` instead
-  — five random characters, no history table ([ADR-038](docs/DECISIONS.md)).
+  — five random characters, no history table ([ADR-038](docs/adr/0038-a-clients-route-key-is-a-short-random-public-id-not-a.md)).
 - **Recovering an abandoned organization is a manual, documented procedure**
-  ([ADR-029](docs/DECISIONS.md)), not a self-service takeover.
-- **Every member sees everything in their organization** ([ADR-037](docs/DECISIONS.md)).
+  ([ADR-029](docs/adr/0029-recovering-an-abandoned-organization-is-a-manual.md)), not a self-service takeover.
+- **Every member sees everything in their organization** ([ADR-037](docs/adr/0037-every-member-sees-everything-in-their-organization.md)).
   Visibility is not scoped by client or membership; only capability varies by role, via
   `OrganizationPermission`. Extend that enum with new cases (`site:delete`, `client:delete`, …)
   as each entity is built, rather than reaching for a visibility layer.
 
 **This is implemented.** The rename and the handle change landed on 2026-08-17 (all six phases,
-recorded in [ADR-025](docs/DECISIONS.md) through [ADR-031](docs/DECISIONS.md)); `composer
+recorded in [ADR-025](docs/adr/0025-team-becomes-organization-the-personal-team-is-removed.md) through [ADR-031](docs/adr/0031-tenant-routes-sit-behind-a-literal-org-segment.md)); `composer
 ci:check` is green on 157 tests. **Nothing from ADR-025 through ADR-031 is left unimplemented.**
 
-- **Admins manage members ranking below their own role** ([ADR-028](docs/DECISIONS.md)) — Members
+- **Admins manage members ranking below their own role** ([ADR-028](docs/adr/0028-admins-manage-members-below-their-own-role.md)) — Members
   only, never another Admin or the Owner, and never inviting above Member. The bound is on the
   _role_, not just the action.
 
@@ -401,6 +402,23 @@ It must pass before a change is done.
 
 Call PHPStan through `composer types:check`, never as `vendor/bin/phpstan analyse` — it
 needs `--memory-limit=1G` and otherwise crashes with an error that does not mention memory.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues on `SaintFrans/wpturbo`, driven through the `gh` CLI.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical labels, unchanged: `needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` (glossary) at the root, one file per ADR under `docs/adr/`.
+See `docs/agents/domain.md`.
 
 <!--VITE PLUS START-->
 

@@ -25,12 +25,12 @@ disproportionately more expensive once servers exist. Nothing is here because it
 
 All four were settled, all four were small, and one of them sat on the critical path.
 
-| Gap | Work                                                                 | Decided by                                       |
-| --- | -------------------------------------------------------------------- | ------------------------------------------------ |
-| G8  | Invert the password-policy condition: strict everywhere except tests | —                                                |
-| G4  | Soft-delete memberships and invitations with the organization        | [ADR-034](DECISIONS.md)                          |
-| G6  | Hash invitation codes                                                | [ADR-033](DECISIONS.md)                          |
-| G2  | Rate-limit invitations and queue the notification                    | [ADR-023](DECISIONS.md), [ADR-035](DECISIONS.md) |
+| Gap | Work                                                                 | Decided by                                                                                                                          |
+| --- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| G8  | Invert the password-policy condition: strict everywhere except tests | —                                                                                                                                   |
+| G4  | Soft-delete memberships and invitations with the organization        | [ADR-034](adr/0034-deleting-an-organization-soft-deletes-its-whole-tree.md)                                                         |
+| G6  | Hash invitation codes                                                | [ADR-033](adr/0033-invitation-codes-are-stored-hashed.md)                                                                           |
+| G2  | Rate-limit invitations and queue the notification                    | [ADR-023](adr/0023-invitation-emails-are-rate-limited-and-queued.md), [ADR-035](adr/0035-laravel-cloud-is-the-deployment-target.md) |
 
 **G2 is the one that matters beyond itself.** It is where the queue gets set up and proven on a
 low-stakes notification, which is exactly the pattern provisioning will need. Establishing it now,
@@ -45,7 +45,7 @@ a broken one doubles the work.
 soft-deleted membership would block the same person being added again. That is why individual
 removals — leaving, being removed, cancelling an invitation, pruning an expired one — are
 `forceDelete()`, and only the organization's own deletion soft-deletes the tree. It matches what
-[ADR-019](DECISIONS.md) already said, and there is a test asserting a removed member can be
+[ADR-019](adr/0019-resources-belong-directly-to-their-team-cross-team.md) already said, and there is a test asserting a removed member can be
 re-added.
 
 **One thing G6 surfaced.** Two of the three routes binding an invitation by its code were only ever
@@ -55,7 +55,7 @@ that is genuinely pre-authentication, the emailed link. See ADR-033's implementa
 
 ### 2 — Audit log (G5) ✅ done 2026-08-18
 
-Settled by [ADR-032](DECISIONS.md) and [ADR-036](DECISIONS.md). This was the largest step here and
+Settled by [ADR-032](adr/0032-an-append-only-audit-log-built-now-while-there-are.md) and [ADR-036](adr/0036-retention-30-days-for-deleted-organizations-24-months.md). This was the largest step here and
 the argument for its position was entirely about timing: there were a handful of auditable actions
 and there will be dozens once servers exist, each destructive. Retrofitting means finding every
 one, with no way to tell which were missed — a missing entry looks exactly like an action that
@@ -85,7 +85,7 @@ actions, 16 feature tests. It was first because it is the only one of the three 
 nothing — `Server` immediately raises enrolment fields that [Q2](OPEN_QUESTIONS.md) has not
 answered, and `Site` needs `Client` for its `client_id`.
 
-One decision came out of it, [ADR-038](DECISIONS.md): a client is addressed by a five-character
+One decision came out of it, [ADR-038](adr/0038-a-clients-route-key-is-a-short-random-public-id-not-a.md): a client is addressed by a five-character
 random `public_id`, not a handle and not the row id. That reverses ADR-030's closing suggestion for
 everything below the tenant segment, so `Server` and `Site` should follow `Client` here rather than
 `Organization`.
@@ -95,27 +95,27 @@ everything below the tenant segment, so `Server` and `Site` should follow `Clien
 anything billing- or ticketing-shaped — ADR-017 named those as the motivating future uses and
 explicitly left them out of scope.
 
-`Server` and `Site` remain. [Q13](DECISIONS.md) is settled: [ADR-037](DECISIONS.md) confirms every member sees everything in
+`Server` and `Site` remain. Q13 is settled: [ADR-037](adr/0037-every-member-sees-everything-in-their-organization.md) confirms every member sees everything in
 their organization. `Server::query()` and `Site::query()` are scoped by `organization_id` alone,
 the same as every other tenant-owned table — no visibility helper, no scope-by-membership
 indirection. What differs by role is capability: destructive actions (`site:delete`,
 `client:delete`, `server:delete`, …) are new `OrganizationPermission` cases, mapped per role
 exactly like the existing ones.
 
-The entities themselves are already designed: [ADR-017](DECISIONS.md) for `Client` (built),
-[ADR-018](DECISIONS.md) for `Site` and `SiteService`, [ADR-019](DECISIONS.md) for ownership and
-deletion, [ADR-030](DECISIONS.md) for route keys via the `GeneratesHandle` trait.
+The entities themselves are already designed: [ADR-017](adr/0017-clients-are-a-grouping-entity-inside-a-team-not-a.md) for `Client` (built),
+[ADR-018](adr/0018-the-hosted-resource-is-called-site-with-a-type-and.md) for `Site` and `SiteService`, [ADR-019](adr/0019-resources-belong-directly-to-their-team-cross-team.md) for ownership and
+deletion, [ADR-030](adr/0030-the-tenant-url-identifier-is-a-name-seeded-separately.md) for route keys via the `GeneratesHandle` trait.
 
 **Three commercial constraints were added on 2026-08-22** and they land entirely on these two
 models. They change what `Server` and `Site` must carry, not where they sit in this order. See
 [BUSINESS_MODEL.md](BUSINESS_MODEL.md); the decisions are
-[ADR-039](DECISIONS.md), [ADR-040](DECISIONS.md) and [ADR-041](DECISIONS.md).
+[ADR-039](adr/0039-hestri-sells-a-control-plane-never-infrastructure.md), [ADR-040](adr/0040-sites-are-containers-on-customer-vps-instances-not.md) and [ADR-041](adr/0041-pricing-scales-on-billable-sites-capabilities-are.md).
 
-| Constraint                                                          | What it means for the migration                                                                                                                                                                                          |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Server` records provenance ([ADR-039](DECISIONS.md))               | One column recording who owns and pays for the machine, and a rule that nothing downstream reads it. It keeps a managed tier possible later at no cost now — and it is worthless the moment something branches on it.    |
-| `Site` lifecycle states are invoice lines ([ADR-041](DECISIONS.md)) | Production, staging, provisioning and suspended must be distinguishable in one scoped query, with no interpretation. Pricing counts production sites and nothing else. Every transition is permission-gated and audited. |
-| `Site` is not welded to a `Server` ([ADR-040](DECISIONS.md))        | The foreign key is mutable and the move is auditable. Moving a site between servers is what replaces the elasticity the infrastructure model deliberately lacks.                                                         |
+| Constraint                                                                                                           | What it means for the migration                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Server` records provenance ([ADR-039](adr/0039-hestri-sells-a-control-plane-never-infrastructure.md))               | One column recording who owns and pays for the machine, and a rule that nothing downstream reads it. It keeps a managed tier possible later at no cost now — and it is worthless the moment something branches on it.    |
+| `Site` lifecycle states are invoice lines ([ADR-041](adr/0041-pricing-scales-on-billable-sites-capabilities-are.md)) | Production, staging, provisioning and suspended must be distinguishable in one scoped query, with no interpretation. Pricing counts production sites and nothing else. Every transition is permission-gated and audited. |
+| `Site` is not welded to a `Server` ([ADR-040](adr/0040-sites-are-containers-on-customer-vps-instances-not.md))       | The foreign key is mutable and the move is auditable. Moving a site between servers is what replaces the elasticity the infrastructure model deliberately lacks.                                                         |
 
 A real **suspend** action follows from the second of those: suspension is how a site stops being
 billable, so delete-and-reinstall is not an acceptable substitute.
@@ -141,7 +141,7 @@ Out of scope for this repository, and the reason for everything above it.
 
 Follows `Server` and `Site` immediately, and belongs on the path rather than beside it. On
 infrastructure we do not own, per-server headroom with per-site attribution is both the thing that
-replaces elasticity ([ADR-040](DECISIONS.md)) and the only honest answer to "why is this site slow
+replaces elasticity ([ADR-040](adr/0040-sites-are-containers-on-customer-vps-instances-not.md)) and the only honest answer to "why is this site slow
 and whose fault is it". Vertical resize through a provider API and moving a site between servers are
 the two actions it makes possible.
 
@@ -150,12 +150,12 @@ agent has to report.
 
 ## Deliberately not in the path
 
-|                                                                                | Why not                                                                                                                                            |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **G3** — one-owner constraint and ownership transfer ([ADR-020](DECISIONS.md)) | Real, and needed before paying customers, but it blocks nothing on the agent path. Slot it wherever there is room.                                 |
-| **G12** — incident detection                                                   | Parked with the NIS2 scoping question ([SECURITY.md](SECURITY.md) §1).                                                                             |
-| **G1** — the agent security model                                              | Not a gap to close; it _is_ step 4.                                                                                                                |
-| Legal and privacy texts                                                        | Explicitly deferred. The retention periods in [ADR-036](DECISIONS.md) are recorded so the eventual documents have something to be written against. |
+|                                                                                                                                  | Why not                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **G3** — one-owner constraint and ownership transfer ([ADR-020](adr/0020-ownership-can-be-transferred-the-database-enforces.md)) | Real, and needed before paying customers, but it blocks nothing on the agent path. Slot it wherever there is room.                                                                                      |
+| **G12** — incident detection                                                                                                     | Parked with the NIS2 scoping question ([SECURITY.md](SECURITY.md) §1).                                                                                                                                  |
+| **G1** — the agent security model                                                                                                | Not a gap to close; it _is_ step 4.                                                                                                                                                                     |
+| Legal and privacy texts                                                                                                          | Explicitly deferred. The retention periods in [ADR-036](adr/0036-retention-30-days-for-deleted-organizations-24-months.md) are recorded so the eventual documents have something to be written against. |
 
 ## What would change this order
 

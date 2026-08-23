@@ -14,15 +14,15 @@ bring their own servers; the platform enrols them, provisions sites onto them, k
 WordPress core, plugins and themes up to date, takes backups and monitors health. The
 hosting bill goes to the customer's own provider, on their own account.
 
-**We sell software, never infrastructure** ([ADR-039](docs/DECISIONS.md)). That is the
+**We sell software, never infrastructure** ([ADR-039](docs/adr/0039-hestri-sells-a-control-plane-never-infrastructure.md)). That is the
 product, not the first of two tiers: a fully managed tier on our own hardware remains
 conceivable but is explicitly not a plan, and its only claim on the present is that
 `Server` will record who owns the machine while nothing downstream branches on it. Sites
 run as per-site isolated containers on ordinary cloud VPS instances, not elastic compute
-([ADR-040](docs/DECISIONS.md)).
+([ADR-040](docs/adr/0040-sites-are-containers-on-customer-vps-instances-not.md)).
 
 Pricing scales on the number of production sites an organization manages, in declining
-bands, with no feature ever withheld to sell an upgrade ([ADR-041](docs/DECISIONS.md)).
+bands, with no feature ever withheld to sell an upgrade ([ADR-041](docs/adr/0041-pricing-scales-on-billable-sites-capabilities-are.md)).
 See [docs/BUSINESS_MODEL.md](docs/BUSINESS_MODEL.md).
 
 None of the hosting domain is implemented yet. Today the application is the account and
@@ -37,15 +37,15 @@ with one site.
 
 ## Architecture at a glance
 
-| Component              | Technology                                                            | Status                                              |
-| ---------------------- | --------------------------------------------------------------------- | --------------------------------------------------- |
-| Control plane          | Laravel 13, Inertia v3, React 19, TypeScript, Tailwind 4, Wayfinder   | **Built** (auth + teams only)                       |
-| Tenancy                | URL-prefixed team scope (`/{current_team}/…`) + membership middleware | **Built**, applied to one route                     |
-| Server agent           | Go binary on customer servers, outbound-only connection               | **Not started** — no code exists                    |
-| Transport              | NATS JetStream                                                        | **Not started** — no code, no config, no dependency |
-| Provisioning / updates | —                                                                     | **Not started**                                     |
-| Monitoring             | —                                                                     | **Not started**                                     |
-| Billing                | Per-site bands ([ADR-041](docs/DECISIONS.md))                         | **Not started** — decided, no code                  |
+| Component              | Technology                                                                                     | Status                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Control plane          | Laravel 13, Inertia v3, React 19, TypeScript, Tailwind 4, Wayfinder                            | **Built** (auth + teams only)                       |
+| Tenancy                | URL-prefixed team scope (`/{current_team}/…`) + membership middleware                          | **Built**, applied to one route                     |
+| Server agent           | Go binary on customer servers, outbound-only connection                                        | **Not started** — no code exists                    |
+| Transport              | NATS JetStream                                                                                 | **Not started** — no code, no config, no dependency |
+| Provisioning / updates | —                                                                                              | **Not started**                                     |
+| Monitoring             | —                                                                                              | **Not started**                                     |
+| Billing                | Per-site bands ([ADR-041](docs/adr/0041-pricing-scales-on-billable-sites-capabilities-are.md)) | **Not started** — decided, no code                  |
 
 The agent design is deliberately outbound-only: the customer's server dials out to the
 control plane, so no inbound port has to be opened on customer infrastructure. This is an
@@ -81,8 +81,8 @@ Nothing. There is no partially-built hosting feature in the tree.
 
 `Server`, `Site` and the agent. `Server` and `Site` now carry commercial constraints as well as
 technical ones — a provenance field on `Server`, and unambiguous lifecycle states on `Site`, because
-those states become the basis of an invoice ([ADR-039](docs/DECISIONS.md),
-[ADR-041](docs/DECISIONS.md)). One question blocks the agent and is deliberately unanswered:
+those states become the basis of an invoice ([ADR-039](docs/adr/0039-hestri-sells-a-control-plane-never-infrastructure.md),
+[ADR-041](docs/adr/0041-pricing-scales-on-billable-sites-capabilities-are.md)). One question blocks the agent and is deliberately unanswered:
 how a server proves which tenant it belongs to, how agent credentials are rotated and revoked,
 and what isolates one tenant's NATS subjects from another's. That, and everything else undecided,
 is tracked in [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md);
@@ -124,10 +124,11 @@ hook runs it over staged files.
 | Document                                         | What it covers                                                                    |
 | ------------------------------------------------ | --------------------------------------------------------------------------------- |
 | [CLAUDE.md](CLAUDE.md)                           | Project vision, architecture principles, and the working method for every change  |
+| [CONTEXT.md](CONTEXT.md)                         | The glossary: every term that carries weight, and the ones that are retired       |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)     | System overview: control plane, agent, data flow, tenancy model                   |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md)         | Core entities, their relationships, and why they are shaped that way              |
 | [docs/BUSINESS_MODEL.md](docs/BUSINESS_MODEL.md) | What we sell, to whom, and how it is priced — and what that obliges in the schema |
-| [docs/DECISIONS.md](docs/DECISIONS.md)           | Decision log: what was decided, when, what was rejected, and why                  |
+| [docs/adr/](docs/adr/)                           | Decision log, one file per decision: what was decided, what was rejected, and why |
 | [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) | Unresolved naming and design questions                                            |
 | [docs/SECURITY.md](docs/SECURITY.md)             | Threat model, security assumptions, and the security-wins rule                    |
 

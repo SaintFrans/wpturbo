@@ -4,7 +4,7 @@ Scoped guidance for PHP work. The root [CLAUDE.md](../CLAUDE.md) has the working
 the security rule; this file covers how code in `app/` is structured.
 
 > `app/` is organised **by Laravel type, with a subfolder per domain inside each type**
-> ([ADR-026](../docs/DECISIONS.md), which reversed ADR-021's domain-first plan). So
+> ([ADR-026](../docs/adr/0026-app-stays-type-first-with-a-domain-subfolder-inside.md), which reversed ADR-021's domain-first plan). So
 > `app/Models/Organizations/Organization.php`, `app/Policies/Organizations/OrganizationPolicy.php`,
 > and later `app/Actions/Sites/`, `app/Models/Servers/`.
 >
@@ -42,7 +42,7 @@ decision — ask first.
 
 Two schemes, and the choice between them is settled — do not invent a third.
 
-**`GeneratesPublicId`** ([ADR-038](../docs/DECISIONS.md)) for resources addressed _inside_
+**`GeneratesPublicId`** ([ADR-038](../docs/adr/0038-a-clients-route-key-is-a-short-random-public-id-not-a.md)) for resources addressed _inside_
 `/org/{organization}/…`: five random characters, assigned on create, checked against soft-deleted
 rows, no history table. `Client` uses it; `Site`, `Server` and `Domain` should too. Not the row id,
 which would publish the platform's own scale in every URL, and not a handle, because nobody
@@ -50,7 +50,7 @@ navigates to a client by guessing its slug.
 
 **`GeneratesHandle`** for the tenant segment itself — today that means `Organization` alone. A
 readable `handle`, seeded from the name once at creation and then independent of it
-([ADR-030](../docs/DECISIONS.md)).
+([ADR-030](../docs/adr/0030-the-tenant-url-identifier-is-a-name-seeded-separately.md)).
 
 Three rules come with the handle, and each exists because of a specific failure. The first two
 apply to public ids as well:

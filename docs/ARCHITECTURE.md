@@ -29,9 +29,9 @@ it is outstanding.
 
 Only the top box exists, and only its left half.
 
-**The servers are the customer's** ([ADR-039](DECISIONS.md)). Hestri manages infrastructure it does
+**The servers are the customer's** ([ADR-039](adr/0039-hestri-sells-a-control-plane-never-infrastructure.md)). Hestri manages infrastructure it does
 not own and never bills for; sites run as per-site isolated containers on ordinary cloud VPS
-instances rather than on elastic compute ([ADR-040](DECISIONS.md)). Both constraints shape the agent
+instances rather than on elastic compute ([ADR-040](adr/0040-sites-are-containers-on-customer-vps-instances-not.md)). Both constraints shape the agent
 design more than any technical preference does: the only thing a stranger can be asked to supply is
 a Linux box with root, which is exactly what an outbound-only agent needs and what an orchestrator
 would not accept. See [BUSINESS_MODEL.md](BUSINESS_MODEL.md).
@@ -104,7 +104,7 @@ in doubt about which you want, check `package.json`.
 ### Code organisation
 
 `app/` is organised **by Laravel type, with a subfolder per domain inside each type**
-([ADR-026](DECISIONS.md), which reversed ADR-021's domain-first plan):
+([ADR-026](adr/0026-app-stays-type-first-with-a-domain-subfolder-inside.md), which reversed ADR-021's domain-first plan):
 
 ```
 app/
@@ -123,14 +123,14 @@ app/
   Rules/            Organizations/ (OrganizationHandle, UniqueOrganizationInvitation, ValidOrganizationInvitation)
 ```
 
-**`Clients` is the first resource domain** ([ADR-017](DECISIONS.md)), and the pattern `Servers` and
+**`Clients` is the first resource domain** ([ADR-017](adr/0017-clients-are-a-grouping-entity-inside-a-team-not-a.md)), and the pattern `Servers` and
 `Sites` should copy: a model, a policy, one form request serving create and update, a thin
 controller, and its factory in the matching `Database\Factories\Clients` namespace.
 `GeneratesPublicId` sits flat in `Concerns/` rather than in `Clients/` — every resource domain will
-use it ([ADR-038](DECISIONS.md)).
+use it ([ADR-038](adr/0038-a-clients-route-key-is-a-short-random-public-id-not-a.md)).
 
 **`Audit` is the first domain that is not `Organizations`**, and deliberately thin: one model, one
-enum, one action ([ADR-032](DECISIONS.md)). It exists as its own domain rather than living inside
+enum, one action ([ADR-032](adr/0032-an-append-only-audit-log-built-now-while-there-are.md)). It exists as its own domain rather than living inside
 `Organizations` because `Server` and `Site` will write to the same table once they exist — the
 audit log belongs to no single resource domain, the same reasoning that keeps `User` flat.
 
@@ -174,7 +174,7 @@ TypeScript type in the same commit.
 ## 3. Tenancy model (BUILT)
 
 Tenancy is **URL-prefix scoped by organization handle**, enforced by middleware. Since
-[ADR-031](DECISIONS.md) the shape is `/org/{organization}/…`.
+[ADR-031](adr/0031-tenant-routes-sit-behind-a-literal-org-segment.md) the shape is `/org/{organization}/…`.
 
 ### How a request is scoped
 
@@ -199,7 +199,7 @@ handle into `URL::defaults()`, so `route('dashboard')` resolves without passing 
 Two other places set the same default and must stay in step: `RedirectsToCurrentOrganization` and
 `HasOrganizations::switchOrganization()`. There is exactly one parameter name, `organization`.
 
-**Step 4 is scheduled for removal** ([ADR-025](DECISIONS.md), phase 3). A read currently performs
+**Step 4 is scheduled for removal** ([ADR-025](adr/0025-team-becomes-organization-the-personal-team-is-removed.md), phase 3). A read currently performs
 a write: following a colleague's link to another organization silently repoints your current
 organization in every other tab. Since phase 4 put organization _settings_ behind the same prefix,
 this now fires on more routes than it used to.
@@ -225,7 +225,7 @@ cannot carry an organization prefix.
 ### Why the handle cannot collide with a route
 
 Because the literal `org/` segment separates them. That is the whole point of
-[ADR-031](DECISIONS.md): before it, a handle occupied the first URL segment and an organization
+[ADR-031](adr/0031-tenant-routes-sit-behind-a-literal-org-segment.md): before it, a handle occupied the first URL segment and an organization
 called "Settings" would have shadowed the application's own routes, which is why a reserved-word
 list existed and had to keep running on both create and rename. With the prefix, that condition
 cannot arise, the list is deleted rather than maintained, and `/org/settings/dashboard` is an
@@ -233,8 +233,8 @@ ordinary URL.
 
 `App\Rules\Organizations\OrganizationHandle` still validates shape and availability. Handles are
 seeded from the name at creation, never regenerated on rename, and never reissued — uniqueness
-spans the live column, soft-deleted rows and `organization_handles` ([ADR-030](DECISIONS.md),
-[ADR-006](DECISIONS.md)). See [DATA_MODEL.md](DATA_MODEL.md) for the reasoning.
+spans the live column, soft-deleted rows and `organization_handles` ([ADR-030](adr/0030-the-tenant-url-identifier-is-a-name-seeded-separately.md),
+[ADR-006](adr/0006-slug-uniqueness-includes-soft-deleted-teams.md)). See [DATA_MODEL.md](DATA_MODEL.md) for the reasoning.
 
 ## 4. Authentication (BUILT)
 
@@ -265,7 +265,7 @@ signing up is a company.
 That organization is ordinary — there is no personal-organization flag. The
 always-one-organization invariant is held by policy (you cannot leave or delete your last one)
 plus `EnsureUserHasOrganization`, which creates a replacement when someone else removes your last
-membership ([ADR-025](DECISIONS.md)).
+membership ([ADR-025](adr/0025-team-becomes-organization-the-personal-team-is-removed.md)).
 
 Password policy tightens in production only (`AppServiceProvider::configureDefaults`):
 12 characters, mixed case, numbers, symbols, and a check against known breach corpora. In
@@ -286,7 +286,7 @@ organization invitations.
 
 The one outbound side effect is the invitation email, sent **inline during the HTTP
 request** via `Notification::route('mail', …)`. It is not queued, so a slow or failing mail
-server directly slows or fails the invite request. [ADR-023](DECISIONS.md) settles that this
+server directly slows or fails the invite request. [ADR-023](adr/0023-invitation-emails-are-rate-limited-and-queued.md) settles that this
 should be rate-limited and queued; not yet implemented.
 
 ## 6. Agent and transport (INTENDED — not built)
@@ -366,11 +366,11 @@ change" rule in `CLAUDE.md` have actual history to attach to.
    `lazyPlugins(() => [...])` callback.
 7. **Do not reintroduce `baseUrl` in `tsconfig.json`.** It would disable type-aware
    linting, and it is removed in TypeScript 7.
-8. **We manage infrastructure we do not own** ([ADR-039](DECISIONS.md)). No provider-account,
+8. **We manage infrastructure we do not own** ([ADR-039](adr/0039-hestri-sells-a-control-plane-never-infrastructure.md)). No provider-account,
    capacity-pool or infrastructure-billing concept belongs in the data model, and `Server`'s
    provenance field must stay unread by everything downstream.
-9. **Density obliges per-site isolation** ([ADR-040](DECISIONS.md)). Many sites share one box, so
+9. **Density obliges per-site isolation** ([ADR-040](adr/0040-sites-are-containers-on-customer-vps-instances-not.md)). Many sites share one box, so
    each needs its own unix user, PHP-FPM pool and database user, with no cross-readable webroots.
    Under [SECURITY.md](SECURITY.md) §0 this is not tradeable for convenience.
-10. **A site's lifecycle state is an invoice line** ([ADR-041](DECISIONS.md)). Anything that changes
+10. **A site's lifecycle state is an invoice line** ([ADR-041](adr/0041-pricing-scales-on-billable-sites-capabilities-are.md)). Anything that changes
     it is permission-gated and audited.

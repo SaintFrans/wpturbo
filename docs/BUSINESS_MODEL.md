@@ -7,8 +7,8 @@ answers constrain the data model — a billable unit has to be unambiguous in th
 can appear on an invoice — and because the pricing shape is a deliberate position, not a number
 someone will pick later.
 
-Decisions here are recorded as [ADR-039](DECISIONS.md), [ADR-040](DECISIONS.md) and
-[ADR-041](DECISIONS.md). **Nothing in this document is implemented.** There is no billing domain,
+Decisions here are recorded as [ADR-039](adr/0039-hestri-sells-a-control-plane-never-infrastructure.md), [ADR-040](adr/0040-sites-are-containers-on-customer-vps-instances-not.md) and
+[ADR-041](adr/0041-pricing-scales-on-billable-sites-capabilities-are.md). **Nothing in this document is implemented.** There is no billing domain,
 no metering, no plan model. See [What this obliges us to build](#7-what-this-obliges-us-to-build).
 
 ---
@@ -20,7 +20,7 @@ enrols them, provisions sites onto them, keeps WordPress updated, takes backups 
 health. The customer's hosting bill goes to their own provider, on their own account, paid with
 their own card.
 
-This is not a starter tier on the way to becoming a host. It is the product ([ADR-039](DECISIONS.md)).
+This is not a starter tier on the way to becoming a host. It is the product ([ADR-039](adr/0039-hestri-sells-a-control-plane-never-infrastructure.md)).
 
 Three reasons, in descending order of importance.
 
@@ -66,7 +66,7 @@ Forge's customer, and Forge is better at it.
 
 ## 3. Infrastructure model
 
-Containerised sites on customer-supplied cloud VPS instances ([ADR-040](DECISIONS.md)). Not
+Containerised sites on customer-supplied cloud VPS instances ([ADR-040](adr/0040-sites-are-containers-on-customer-vps-instances-not.md)). Not
 elastic cloud, not Kubernetes, not per-request compute.
 
 Bring-your-own-server settles most of this on its own: you cannot ask a stranger to supply a
@@ -97,7 +97,7 @@ that is what the model costs.
    attribution. Also the answer to "whose fault is a slow site" on infrastructure we do not own.
 2. **Vertical resize** through the provider API, as a control-plane action.
 3. **Moving a site between servers** as a first-class operation. The data model already allows
-   it: [ADR-016](DECISIONS.md) makes sites a top-level area listable across servers, with `Server`
+   it: [ADR-016](adr/0016-top-navigation-for-areas-contextual-navigation-for.md) makes sites a top-level area listable across servers, with `Server`
    a peer rather than a mandatory parent.
 4. **Multi-server organizations from the start.** Sixty sites means three boxes, and placing a
    site on the right one has to be trivial.
@@ -139,7 +139,7 @@ Team members, clients, staging environments and development copies are also free
 
 ### No feature gating
 
-**Every account has every capability, at every volume** ([ADR-041](DECISIONS.md)). There is no
+**Every account has every capability, at every volume** ([ADR-041](adr/0041-pricing-scales-on-billable-sites-capabilities-are.md)). There is no
 comparison table, because there is nothing to compare. White-labelling, staging, backups, the
 audit log, roles — a three-site freelancer gets what a five-hundred-site agency gets.
 
@@ -241,12 +241,12 @@ Spend alerts, and an optional hard cap that refuses new sites rather than silent
 part of shipping this — not a later refinement.
 
 **Client-facing access is not decided.** "Every account gets every capability" cannot promise a
-client login, because [ADR-017](DECISIONS.md) deliberately gave `Client` no login of its own, and a
+client login, because [ADR-017](adr/0017-clients-are-a-grouping-entity-inside-a-team-not-a.md) deliberately gave `Client` no login of its own, and a
 client-facing principal sits outside the membership model entirely. See
 [Q15](OPEN_QUESTIONS.md). Until that is answered, client access is not part of the offer.
 
 **Billing the agency's own clients is out of scope.** Invoicing, ticketing and client billing are
-attractive and were explicitly deferred by [ADR-017](DECISIONS.md). They stay deferred. Hestri
+attractive and were explicitly deferred by [ADR-017](adr/0017-clients-are-a-grouping-entity-inside-a-team-not-a.md). They stay deferred. Hestri
 bills the agency; what the agency bills its clients is the agency's business, and building an
 invoicing product is a way to ship neither.
 
@@ -259,7 +259,7 @@ Nothing here changes the build order in [MVP_PLAN.md](MVP_PLAN.md): `Server`, th
 is constrain the two models that come next.
 
 **`Server`** carries a provenance field recording who owns and pays for the machine
-([ADR-039](DECISIONS.md)). Nothing downstream may branch on its value — not the agent, not
+([ADR-039](adr/0039-hestri-sells-a-control-plane-never-infrastructure.md)). Nothing downstream may branch on its value — not the agent, not
 provisioning, not `Site`. If that line holds, a fully managed tier later is a provisioner plus
 billing, not a migration.
 

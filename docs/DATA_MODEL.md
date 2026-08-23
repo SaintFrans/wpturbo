@@ -75,7 +75,7 @@ unmodelled.
 `#[Hidden]`, which matters because `HandleInertiaRequests` shares the whole user model as a page
 prop on every request.
 
-`User` stays flat in `app/Models/` — it belongs to no domain ([ADR-026](DECISIONS.md)).
+`User` stays flat in `app/Models/` — it belongs to no domain ([ADR-026](adr/0026-app-stays-type-first-with-a-domain-subfolder-inside.md)).
 
 **Why `current_organization_id` lives on the user, not in the session.** Organization context
 survives logout, device changes and email links. A user following an invitation link from their
@@ -84,7 +84,7 @@ frequency switching actually happens.
 
 **Only an explicit switch writes this column.** Visiting `/org/{handle}/…` scopes that request and
 nothing more, so following a colleague's link does not repoint the reader's other tabs
-([ADR-025](DECISIONS.md)). A read performing a write was the problem; `organizations.switch` is a
+([ADR-025](adr/0025-team-becomes-organization-the-personal-team-is-removed.md)). A read performing a write was the problem; `organizations.switch` is a
 `POST` and is the one route that changes it.
 
 ### Organization
@@ -103,13 +103,13 @@ exist and invite enumeration. The handle also keeps the URL readable, which matt
 staff share links internally.
 
 **Why the name is not validated against reserved words.** It used to be, because the slug derived
-from it occupied the first URL segment. Since [ADR-031](DECISIONS.md) every tenant route sits
+from it occupied the first URL segment. Since [ADR-031](adr/0031-tenant-routes-sit-behind-a-literal-org-segment.md) every tenant route sits
 behind a literal `org/` segment, so a handle cannot shadow an application route and a name cannot
 shadow anything at all. An organization may legitimately be called "Settings". Only the handle is
 validated, by `App\Rules\Organizations\OrganizationHandle`, and only for shape and availability.
 
 **Why renaming never changes the handle.** `Organization::booted()` seeds the handle in `creating`
-and has no `updating` counterpart. Before [ADR-030](DECISIONS.md) the slug was regenerated on
+and has no `updating` counterpart. Before [ADR-030](adr/0030-the-tenant-url-identifier-is-a-name-seeded-separately.md) the slug was regenerated on
 rename, which silently invalidated every bookmark, shared link and mail archive the moment someone
 renamed their organization. Changing the handle is now a separate, explicit action on the General
 settings tab, warned about in the UI.
@@ -117,7 +117,7 @@ settings tab, warned about in the UI.
 **Why a handle is never reissued.** `GeneratesHandle` checks three sources: the live column,
 soft-deleted rows, and `organization_handles`. If a retired handle were reissued, links and
 bookmarks pointing at the old tenant would silently resolve to a _different_ tenant's data — a
-cross-tenant leak triggered by nothing more than a stale bookmark ([ADR-006](DECISIONS.md)).
+cross-tenant leak triggered by nothing more than a stale bookmark ([ADR-006](adr/0006-slug-uniqueness-includes-soft-deleted-teams.md)).
 
 **Why every user gets an organization at registration.** `CreateNewUser` creates one inside the
 registration transaction, named after the user with no suffix. A user is therefore never in a
@@ -126,7 +126,7 @@ downstream feature.
 
 **There is no personal organization.** The one created at registration is ordinary — renameable,
 and deletable once a second exists. The invariant is held by two rules instead of a flag
-([ADR-025](DECISIONS.md)):
+([ADR-025](adr/0025-team-becomes-organization-the-personal-team-is-removed.md)):
 
 - **Voluntary** — `OrganizationPolicy` refuses to let a user leave or delete their _last_
   organization.
@@ -142,7 +142,7 @@ Note that both policy conditions guard **two** things: the last-organization rul
 **Known asymmetry, resolved but not yet implemented.** `Organization` uses `SoftDeletes`, but
 `OrganizationController::destroy` hard-deletes memberships and invitations before soft-deleting
 the organization. A restored organization would come back with no members and no owner.
-[ADR-019](DECISIONS.md) settles this: they should be soft-deleted together, so a restore is
+[ADR-019](adr/0019-resources-belong-directly-to-their-team-cross-team.md) settles this: they should be soft-deleted together, so a restore is
 coherent.
 
 ### organization_handles
@@ -180,7 +180,7 @@ unlikely.
 
 **Not yet enforced:** nothing guarantees exactly one Owner per organization.
 `Organization::owner()` returns the first member whose role is `owner`. Nothing at the database
-level prevents zero owners or several. [ADR-020](DECISIONS.md) settles that a partial unique index
+level prevents zero owners or several. [ADR-020](adr/0020-ownership-can-be-transferred-the-database-enforces.md) settles that a partial unique index
 and a transfer-ownership flow are both needed; neither is built.
 
 ### OrganizationInvitation
@@ -196,7 +196,7 @@ and a transfer-ownership flow are both needed; neither is built.
 | `expires_at`                    | Set to `now()->addDays(3)` on create                                   |
 | `accepted_at`                   | Null while pending                                                     |
 
-**The plaintext code is never stored** ([ADR-033](DECISIONS.md)). It exists only in memory on the
+**The plaintext code is never stored** ([ADR-033](adr/0033-invitation-codes-are-stored-hashed.md)). It exists only in memory on the
 `OrganizationInvitation` instance that just created it (`$invitation->plainCode`, a non-persisted
 property) and in the URL emailed to the invitee. A database read — an operator, a stolen dump —
 therefore yields no usable invitation link, only digests that cannot be reversed into one.
@@ -212,7 +212,7 @@ actually authorises those was always the check below, not the code's secrecy. Th
 `ValidOrganizationInvitation` additionally requires that the authenticated user's email matches
 the invitation's, case-insensitively. A leaked invitation link cannot be redeemed by whoever finds
 it — they would also need control of the invited mailbox. Deliberate; see
-[SECURITY.md](SECURITY.md) and [ADR-009](DECISIONS.md).
+[SECURITY.md](SECURITY.md) and [ADR-009](adr/0009-the-invitation-code-alone-does-not-grant-access.md).
 
 **Why invitations expire and are pruned.** Three days, with a daily scheduled prune in
 `routes/console.php`. An unbounded pending invitation is a standing grant of access to a tenant,
@@ -220,7 +220,7 @@ held by an address that may change hands.
 
 ### Client
 
-`clients` ([ADR-017](DECISIONS.md), keyed per [ADR-038](DECISIONS.md)). Soft-deleted. Route key is
+`clients` ([ADR-017](adr/0017-clients-are-a-grouping-entity-inside-a-team-not-a.md), keyed per [ADR-038](adr/0038-a-clients-route-key-is-a-short-random-public-id-not-a.md)). Soft-deleted. Route key is
 `public_id`. `App\Models\Clients\Client`.
 
 A customer of the organization, used to group the sites built and maintained for them. **Not** a
@@ -240,7 +240,7 @@ organization sees every client in it (ADR-037).
 segment of the URL, where people read and share it. Nobody guesses their way to a client. The row
 id was rejected for a different reason: a sequential key publishes how many clients exist across
 the whole platform. Five random characters say nothing and cost one loop
-([ADR-038](DECISIONS.md)).
+([ADR-038](adr/0038-a-clients-route-key-is-a-short-random-public-id-not-a.md)).
 
 **Why there is no `client_handles` table.** `organization_handles` prevents a released handle from
 being claimed by a _different tenant_, which would point stale bookmarks at another agency's data.
@@ -270,7 +270,7 @@ a site need not belong to a client (ADR-017, ADR-018).
 
 ### AuditLogEntry
 
-`audit_log_entries` ([ADR-032](DECISIONS.md)). `App\Models\Audit\AuditLogEntry` — its own domain,
+`audit_log_entries` ([ADR-032](adr/0032-an-append-only-audit-log-built-now-while-there-are.md)). `App\Models\Audit\AuditLogEntry` — its own domain,
 `Audit`, since it will be written to by every future domain (`Server`, `Site`), not just
 `Organization`. Append-only: no `updated_at` column, and nothing in the application updates a row.
 
@@ -298,7 +298,7 @@ deleted. The last two — a voluntary departure and a declined invitation — we
 implementation; ADR-032 named the others.
 
 **Read access is Owner and Admin only** — a `ViewAuditLog` permission, the one deliberate exception
-to [ADR-037](DECISIONS.md)'s "every member sees everything." This is a record of administrative
+to [ADR-037](adr/0037-every-member-sees-everything-in-their-organization.md)'s "every member sees everything." This is a record of administrative
 and destructive action, not a resource a member needs to see to do their job.
 
 **Append-only is a convention, not a database guarantee.** The model exposes no update path and
@@ -325,9 +325,9 @@ role to permission set.
 | `client:delete`       |  ✅   |  ✅   |   —    |
 | `audit_log:view`      |  ✅   |  ✅   |   —    |
 
-¹ Only against a role ranking **strictly below** the actor's own ([ADR-028](DECISIONS.md)).
+¹ Only against a role ranking **strictly below** the actor's own ([ADR-028](adr/0028-admins-manage-members-below-their-own-role.md)).
 
-**The client permissions are the first any Member holds** ([ADR-038](DECISIONS.md)). A client is an
+**The client permissions are the first any Member holds** ([ADR-038](adr/0038-a-clients-route-key-is-a-short-random-public-id-not-a.md)). A client is an
 organisational label, and withholding it would only mean the person doing the work asking someone
 else to type a customer's name. Deleting one regroups everything tagged to it, so that stays with
 Owner and Admin.
@@ -337,7 +337,7 @@ hold `member:remove`?", never "is this user an admin?". Adding a role, or moving
 between roles, is then a one-line change in `OrganizationRole::permissions()` instead of a
 search-and-replace across the codebase.
 
-**Why Admins can manage Members but nothing above them.** Until [ADR-028](DECISIONS.md) only the
+**Why Admins can manage Members but nothing above them.** Until [ADR-028](adr/0028-admins-manage-members-below-their-own-role.md) only the
 Owner could revoke access, so an unreachable Owner meant a departing employee kept theirs — the
 safest-looking permission map produced the least safe outcome. Widening it is bounded by one
 comparison, `OrganizationRole::outranks()`, which blocks self-promotion, removing the Owner and
@@ -389,8 +389,8 @@ When Servers and Sites are added:
    filtering in PHP.
 3. Route keys for tenant resources are non-sequential, for the same enumeration reasons the
    organization handle is. There are two shared implementations and no third:
-   `GeneratesHandle` ([ADR-030](DECISIONS.md)) for anything occupying the tenant segment of the
-   URL, and `GeneratesPublicId` ([ADR-038](DECISIONS.md)) — five random characters, no history
+   `GeneratesHandle` ([ADR-030](adr/0030-the-tenant-url-identifier-is-a-name-seeded-separately.md)) for anything occupying the tenant segment of the
+   URL, and `GeneratesPublicId` ([ADR-038](adr/0038-a-clients-route-key-is-a-short-random-public-id-not-a.md)) — five random characters, no history
    table — for resources addressed _inside_ it. `Client` uses the second; `Site`, `Server` and
    `Domain` should too unless someone makes the case for a readable, editable key.
 4. Anything holding a credential to reach a customer server is encrypted at rest, and is never
@@ -399,7 +399,7 @@ When Servers and Sites are added:
 These are consequences of the tenant-isolation rule in [SECURITY.md](SECURITY.md), not independent
 preferences.
 
-**Every member sees everything in their organization, by design** ([ADR-037](DECISIONS.md)).
+**Every member sees everything in their organization, by design** ([ADR-037](adr/0037-every-member-sees-everything-in-their-organization.md)).
 `Client`, `Server` and `Site` queries are scoped by `organization_id` alone — no per-member or
 per-client visibility layer. What varies by role is capability, not visibility: destructive or
 sensitive actions (`site:delete`, `client:delete`, `server:delete`, …) are added to
@@ -407,7 +407,7 @@ sensitive actions (`site:delete`, `client:delete`, `server:delete`, …) are add
 (ADR-005, ADR-028), not a new grant table.
 
 `Client` is built (see above). The two entities after it are decided but not built — see
-[ADR-017](DECISIONS.md) and [ADR-018](DECISIONS.md):
+[ADR-017](adr/0017-clients-are-a-grouping-entity-inside-a-team-not-a.md) and [ADR-018](adr/0018-the-hosted-resource-is-called-site-with-a-type-and.md):
 
 - **`Client`** — owned by an `Organization`, not a tenancy level. `Site` (and later `Domain`,
   `Mailbox`) carries a nullable `client_id` for grouping and future billing/ticketing.
@@ -421,16 +421,16 @@ Two of the constraints above are not technical. They come from
 [BUSINESS_MODEL.md](BUSINESS_MODEL.md) and they are cheap now and painful to retrofit.
 
 - **`Server` carries a provenance field** — who owns the machine and who pays for it
-  ([ADR-039](DECISIONS.md)). Nothing may branch on its value: not `Site`, not provisioning, not the
+  ([ADR-039](adr/0039-hestri-sells-a-control-plane-never-infrastructure.md)). Nothing may branch on its value: not `Site`, not provisioning, not the
   agent. It exists so that a fully managed tier later is a provisioner plus billing rather than a
   migration, and it is worthless if anything starts reading it.
-- **`Site` lifecycle states are financially load-bearing** ([ADR-041](DECISIONS.md)). Production,
+- **`Site` lifecycle states are financially load-bearing** ([ADR-041](adr/0041-pricing-scales-on-billable-sites-capabilities-are.md)). Production,
   staging, provisioning and suspended must be distinguishable in a single scoped query with no
   interpretation, because pricing counts production sites and nothing else. Transitions between them
   are therefore permission-gated like any destructive action, and written to the audit log — a site
   quietly moved out of a billable state is a financial event, not a bookkeeping one.
 - **Suspension is a real state**, not delete-and-reinstall, because it is the mechanism by which a
   site stops being billed.
-- **`Site` is not welded to one `Server`** ([ADR-040](DECISIONS.md)). Moving a site between servers
+- **`Site` is not welded to one `Server`** ([ADR-040](adr/0040-sites-are-containers-on-customer-vps-instances-not.md)). Moving a site between servers
   replaces the elasticity the infrastructure model deliberately does not have, so the foreign key
   must be mutable and the move auditable.
