@@ -1,4 +1,7 @@
+"use client"
+
 import * as React from "react"
+import { cn } from "cn"
 import {
   Breadcrumb as BreadcrumbPrimitive,
   Breadcrumbs as BreadcrumbsPrimitive,
@@ -8,9 +11,7 @@ import {
   type BreadcrumbsProps,
   type LinkProps,
 } from "react-aria-components"
-
-import { cn } from "@/lib/utils"
-import { ChevronRightIcon, MoreHorizontalIcon } from "lucide-react"
+import { CaretRightIcon, DotsThreeIcon } from "@phosphor-icons/react"
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
   return (
@@ -31,7 +32,7 @@ function BreadcrumbList<T extends object>({
     <BreadcrumbsPrimitive
       data-slot="breadcrumb-list"
       className={cn(
-        "flex flex-wrap items-center gap-1.5 text-sm wrap-break-word text-muted-foreground sm:gap-2.5",
+        "flex flex-wrap items-center gap-1.5 text-sm wrap-break-word text-muted-foreground",
         className
       )}
       {...props}
@@ -48,7 +49,7 @@ function BreadcrumbItem({
   return (
     <BreadcrumbPrimitive
       data-slot="breadcrumb-item"
-      className={cn("inline-flex items-center gap-1.5", className)}
+      className={cn("inline-flex items-center gap-1", className)}
       {...props}
     >
       {composeRenderProps(children, (children, { isCurrent }) => (
@@ -61,7 +62,7 @@ function BreadcrumbItem({
               aria-hidden="true"
               className={cn("[&>svg]:size-3.5", separatorClassName)}
             >
-              <ChevronRightIcon />
+              <CaretRightIcon />
             </span>
           )}
         </>
@@ -109,7 +110,7 @@ function BreadcrumbEllipsis({
       )}
       {...props}
     >
-      <MoreHorizontalIcon
+      <DotsThreeIcon
       />
       <span className="sr-only">More</span>
     </span>
