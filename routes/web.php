@@ -7,6 +7,7 @@ use App\Http\Controllers\Organizations\OrganizationController;
 use App\Http\Controllers\Organizations\OrganizationInvitationController;
 use App\Http\Controllers\Organizations\OrganizationMemberController;
 use App\Http\Middleware\EnsureOrganizationMembership;
+use App\Models\Organizations\Organization;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -41,6 +42,16 @@ Route::middleware(['auth', 'verified'])->prefix('org')->name('organizations.')->
 Route::prefix('org/{organization}')
     ->middleware(['auth', 'verified', EnsureOrganizationMembership::class])
     ->group(function () {
+        /*
+         * The organization's root is the Overview, not a 404. A tenant prefix is something people
+         * type, shorten a link to, and land on from an old bookmark, so it redirects to the
+         * dashboard rather than being a hole in the URL space. It sits inside the membership
+         * middleware deliberately: a non-member gets the same answer here as anywhere else under
+         * the prefix, so this route cannot be used to probe which handles exist.
+         */
+        Route::get('/', fn (Organization $organization) => redirect()->route('dashboard', $organization))
+            ->name('organizations.home');
+
         Route::get('dashboard', DashboardController::class)->name('dashboard');
 
         /*

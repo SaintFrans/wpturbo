@@ -105,7 +105,7 @@ route, so there is no reserved-word list to keep running. New **tenant resource*
 - The retention purge ADR-036 requires (30 days for deleted organizations, 24 months for audit
   entries) is decided but not built — no scheduled task exists yet.
 - The "Audit log" settings tab is shown to every member; only the page itself is Owner/Admin-only
-  (ADR-032's implementation note explains why — `OrganizationSettingsLayout` receives no page
+  (ADR-032's implementation note explains why — `SettingsLayout` receives no page
   props to gate on). A Member who clicks it gets a 403, not a hidden tab.
 
 ## Testing

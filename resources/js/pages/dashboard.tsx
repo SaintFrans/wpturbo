@@ -1,9 +1,8 @@
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 import { EmptyState } from '@/components/empty-state';
-import PendingInvitationsModal from '@/components/pending-invitations-modal';
+import PendingInvitationsModal from '@/components/organizations/pending-invitations-modal';
 import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
-import { dashboard } from '@/routes';
 import type { DashboardInvitation } from '@/types';
 
 type Props = {
@@ -23,7 +22,7 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
                 open={pendingInvitations.length > 0 && showInvitations}
                 onOpenChange={setShowInvitations}
             />
-            <div className="mx-auto flex w-full max-w-[1092px] flex-col">
+            <div className="flex w-full flex-col">
                 <EmptyState
                     title="Nothing to show here yet"
                     description="Servers and applications will appear here once the hosting domain is built. Until then, this dashboard is a placeholder."
@@ -37,16 +36,3 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
         </>
     );
 }
-
-Dashboard.layout = (props: {
-    currentOrganization?: { handle: string } | null;
-}) => ({
-    breadcrumbs: [
-        {
-            title: 'Overview',
-            href: props.currentOrganization
-                ? dashboard(props.currentOrganization.handle)
-                : '/',
-        },
-    ],
-});

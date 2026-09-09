@@ -133,3 +133,25 @@ test('dashboard does not include or delete other users invitations', function ()
         'id' => $invitation->id,
     ]);
 });
+
+/**
+ * A tenant prefix is something people type, shorten and bookmark, so `/org/{handle}` is the
+ * Overview rather than a hole in the URL space.
+ */
+test('the organization root redirects to the overview', function () {
+    $user = User::factory()->create();
+    $organization = $user->currentOrganization;
+
+    $this->actingAs($user)
+        ->get(route('organizations.home', $organization))
+        ->assertRedirect(route('dashboard', $organization));
+});
+
+test('the organization root is not readable by a non-member', function () {
+    $outsider = User::factory()->create();
+    $organization = Organization::factory()->create();
+
+    $this->actingAs($outsider)
+        ->get(route('organizations.home', $organization))
+        ->assertForbidden();
+});

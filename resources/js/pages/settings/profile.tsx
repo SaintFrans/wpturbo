@@ -1,6 +1,6 @@
 import { Form, Head, Link, usePage } from '@inertiajs/react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
-import DeleteUser from '@/components/delete-user';
+import DeleteUser from '@/components/account/delete-user';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,7 +16,6 @@ import {
     FrameTitle,
 } from '@/components/ui/frame';
 import { Input } from '@/components/ui/input';
-import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
 import type { Auth } from '@/types';
 
@@ -153,12 +152,3 @@ export default function Profile({
         </>
     );
 }
-
-Profile.layout = {
-    breadcrumbs: [
-        {
-            title: 'Profile settings',
-            href: edit(),
-        },
-    ],
-};

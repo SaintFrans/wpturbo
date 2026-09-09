@@ -2,10 +2,10 @@ import { Form, Head } from '@inertiajs/react';
 import { useRef } from 'react';
 import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
 import InputError from '@/components/input-error';
-import type { Props as ManagePasskeysProps } from '@/components/manage-passkeys';
-import ManagePasskeys from '@/components/manage-passkeys';
-import type { Props as ManageTwoFactorProps } from '@/components/manage-two-factor';
-import ManageTwoFactor from '@/components/manage-two-factor';
+import type { Props as ManagePasskeysProps } from '@/components/account/manage-passkeys';
+import ManagePasskeys from '@/components/account/manage-passkeys';
+import type { Props as ManageTwoFactorProps } from '@/components/account/manage-two-factor';
+import ManageTwoFactor from '@/components/account/manage-two-factor';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +20,6 @@ import {
     FrameRow,
     FrameTitle,
 } from '@/components/ui/frame';
-import { edit } from '@/routes/security';
 
 type Props = {
     passwordRules: string;
@@ -177,12 +176,3 @@ export default function Security(props: Props) {
         </>
     );
 }
-
-Security.layout = {
-    breadcrumbs: [
-        {
-            title: 'Security settings',
-            href: edit(),
-        },
-    ],
-};

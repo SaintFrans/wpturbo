@@ -1,7 +1,7 @@
 import { Form, Head } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
-import OrganizationInvitationAlert from '@/components/organization-invitation-alert';
+import OrganizationInvitationAlert from '@/components/organizations/organization-invitation-alert';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -102,6 +102,7 @@ export default function Register({
                             <Button
                                 type="submit"
                                 className="mt-2 w-full"
+                                shape="pill"
                                 data-test="register-user-button"
                             >
                                 {processing && <Spinner />}

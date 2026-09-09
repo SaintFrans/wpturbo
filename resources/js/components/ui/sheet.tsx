@@ -14,7 +14,7 @@ import {
 } from "react-aria-components"
 
 import { Button } from "@/components/ui/button"
-import { XIcon } from "@phosphor-icons/react"
+import { XIcon } from "lucide-react"
 
 function SheetTrigger({ ...props }: SheetTriggerPrimitiveProps) {
   return <SheetTriggerPrimitive data-slot="sheet-trigger" {...props} />
@@ -92,7 +92,7 @@ function Sheet({
           {showCloseButton && (
             <SheetClose
               variant="ghost"
-              className="absolute top-3 right-3"
+              className="absolute top-4 right-4"
               size="icon-sm"
             >
               <XIcon
@@ -132,7 +132,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-header"
-      className={cn("flex flex-col gap-0.5 p-4", className)}
+      className={cn("flex flex-col gap-1.5 p-4", className)}
       {...props}
     />
   )
@@ -156,10 +156,7 @@ function SheetTitle({
     <Heading
       slot="title"
       data-slot="sheet-title"
-      className={cn(
-        "font-heading text-base font-medium text-foreground",
-        className
-      )}
+      className={cn("font-heading font-medium text-foreground", className)}
       {...props}
     />
   )

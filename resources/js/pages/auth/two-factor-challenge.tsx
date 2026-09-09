@@ -107,6 +107,7 @@ export default function TwoFactorChallenge() {
                             <Button
                                 type="submit"
                                 className="w-full"
+                                shape="pill"
                                 isDisabled={processing}
                             >
                                 Continue

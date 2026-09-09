@@ -1,6 +1,6 @@
 import { Form, Head } from '@inertiajs/react';
 import { useState } from 'react';
-import DeleteOrganizationModal from '@/components/delete-organization-modal';
+import DeleteOrganizationModal from '@/components/organizations/delete-organization-modal';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {

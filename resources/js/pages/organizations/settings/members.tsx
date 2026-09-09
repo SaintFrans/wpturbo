@@ -1,9 +1,9 @@
 import { Head, router } from '@inertiajs/react';
 import { ChevronDown, Mail, UserPlus, X } from 'lucide-react';
 import { useState } from 'react';
-import CancelInvitationModal from '@/components/cancel-invitation-modal';
-import InviteMemberModal from '@/components/invite-member-modal';
-import RemoveMemberModal from '@/components/remove-member-modal';
+import CancelInvitationModal from '@/components/organizations/cancel-invitation-modal';
+import InviteMemberModal from '@/components/organizations/invite-member-modal';
+import RemoveMemberModal from '@/components/organizations/remove-member-modal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

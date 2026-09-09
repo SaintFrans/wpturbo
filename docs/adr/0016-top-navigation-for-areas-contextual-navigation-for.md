@@ -1,6 +1,26 @@
 # ADR-016 — Top navigation for areas, contextual navigation for resources
 
-**2026-08-15** · **Status**: Accepted, **amended by [ADR-025](0025-team-becomes-organization-the-personal-team-is-removed.md)**
+**2026-08-15** · **Status**: Accepted, **amended by [ADR-025](0025-team-becomes-organization-the-personal-team-is-removed.md)**, **[ADR-042](0042-one-menu-bar-and-a-real-sidebar-for-resource-sections.md)** and **[ADR-046](0046-settings-is-one-area-with-a-group-per-scope.md)**
+
+> **Account settings and organization settings merged into one Settings area on 2026-09-07
+> ([ADR-046](0046-settings-is-one-area-with-a-group-per-scope.md)), its fifth position on this
+> question.** Still not an area pill, still two URL spaces — but one destination, one account-menu
+> row, and a sidebar with a group per scope. Read "Account settings are still not an area" below as
+> "Settings is still not an area".
+
+> **Settings left the area pills on 2026-09-07, its fourth position on this question.** It is
+> tenant-scoped and stays at `/org/{organization}/settings`, but the link to it now lives in the
+> account menu rather than in row two. The bar carries only Overview and Clients. In the same
+> change, row one's separate tenant switcher and account menu were merged into one button —
+> `AccountMenu` in `app-header.tsx` — showing the active organization and opening a menu that
+> carries both the person and the organizations you belong to. Row one below should be read as
+> "logo, account menu" rather than "logo, tenant switcher, account menu".
+>
+> **The shapes changed on 2026-09-07 ([ADR-042](0042-one-menu-bar-and-a-real-sidebar-for-resource-sections.md)).**
+> The two rows below are now **one menu bar** — identity, areas, search and account in a single
+> row — and the second level is shadcn's `Sidebar` on the left rather than a sticky column of
+> links. Read "row two" below as "the areas in the menu bar", and `SectionNav` as the sidebar
+> menu it now renders. The two-level rule itself is unchanged and is the part that matters.
 
 > **Two amendments, both implemented 2026-08-17.**
 >
@@ -66,17 +86,17 @@ servers, with Servers a peer rather than a mandatory parent.
 - New tenant-scoped **areas** go in row two of `app-header`. New **sections** of a resource
   go in a `SectionNav`. Anything that is a section of one resource must not be added to the
   top nav.
-- `SectionNav` (`components/section-nav.tsx`) is the reusable second level. Settings is its
-  first consumer and the working reference.
+- The section nav is the reusable second level. Settings is its first consumer and the working
+  reference. It moved into `layouts/section-layout.tsx` with the sidebar it fills (ADR-045).
 - The shell follows Laravel Forge's proportions — a 1920px container, `px-4 sm:px-8`
   gutters, a 16.5 unit header row, tabs with a sliding underline, and content in an inset
   panel with a hairline ring. Those proportions are expressed with **this project's existing
   tokens** (`bg-sidebar`, `ring-sidebar-border`, `bg-accent`), not with a parallel set of
   semantic colours copied from Forge. Adopting Forge's token vocabulary would have meant
   maintaining two design systems at once.
-- `NavTabs`, `EmptyState`, `AppFooter` and the `AppContent` panel are built as reusable
-  components rather than markup inside the dashboard, because every server and application
-  list will need exactly these four.
+- `NavTabs` and `EmptyState` are built as reusable components rather than markup inside the
+  dashboard, because every server and application list will need them. `AppFooter` and the
+  `AppContent` panel that stood beside them here are gone (ADR-042, ADR-045).
 - This settles [Q4](../OPEN_QUESTIONS.md): tenant resources are routed
   `/{current_team}/servers/{server}/…` and `/{current_team}/applications/{application}/…`,
   while user-level `/settings/…` stays outside the tenant prefix deliberately, because it

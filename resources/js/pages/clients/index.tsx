@@ -1,9 +1,9 @@
 import { Head } from '@inertiajs/react';
 import { Building2, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import DeleteClientModal from '@/components/delete-client-modal';
+import DeleteClientModal from '@/components/clients/delete-client-modal';
 import { EmptyState } from '@/components/empty-state';
-import SaveClientModal from '@/components/save-client-modal';
+import SaveClientModal from '@/components/clients/save-client-modal';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -17,7 +17,6 @@ import {
     FramePanel,
     FrameTitle,
 } from '@/components/ui/frame';
-import { index as clientsIndex } from '@/routes/clients';
 import type { Client, Organization, OrganizationPermissions } from '@/types';
 
 type Props = {
@@ -91,7 +90,8 @@ export default function ClientsIndex({
                                 action={
                                     permissions.canCreateClient ? (
                                         <Button
-                                            size="sm"
+                                            size="lg"
+                                            shape="pill"
                                             data-test="add-first-client-button"
                                             onPress={addClient}
                                         >
@@ -215,16 +215,3 @@ export default function ClientsIndex({
         </>
     );
 }
-
-ClientsIndex.layout = (props: {
-    currentOrganization?: { handle: string } | null;
-}) => ({
-    breadcrumbs: props.currentOrganization
-        ? [
-              {
-                  title: 'Clients',
-                  href: clientsIndex(props.currentOrganization.handle),
-              },
-          ]
-        : [],
-});

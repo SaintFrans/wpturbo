@@ -1,8 +1,8 @@
 import { Form, Head } from '@inertiajs/react';
 import InputError from '@/components/input-error';
-import PasskeyVerify from '@/components/passkey-verify';
+import PasskeyVerify from '@/components/account/passkey-verify';
 import PasswordInput from '@/components/password-input';
-import OrganizationInvitationAlert from '@/components/organization-invitation-alert';
+import OrganizationInvitationAlert from '@/components/organizations/organization-invitation-alert';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -90,6 +90,7 @@ export default function Login({
                             <Button
                                 type="submit"
                                 className="mt-4 w-full"
+                                shape="pill"
                                 isDisabled={processing}
                                 data-test="login-button"
                             >
