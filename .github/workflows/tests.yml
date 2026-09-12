@@ -15,7 +15,7 @@ jobs:
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 
@@ -29,7 +29,7 @@ jobs:
             # Installs Vite+, Node and the package manager in one step, so no
             # separate setup-node or pnpm setup is needed.
             - name: Setup Vite+
-              uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
+              uses: voidzero-dev/setup-vp@49c3e4e92c52e7f8392712a9267bbe71c5ab30e5 # v1.19.0
               with:
                   node-version: '24'
                   cache: true
